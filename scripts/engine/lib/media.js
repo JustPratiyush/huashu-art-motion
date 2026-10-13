@@ -1,34 +1,34 @@
-// 真实素材 MD：把截图、照片、录像帧放进画面当主体。解说片里有真实素材就让它满幅当主画面，代码负责解释、标注和运镜。
-// 出处：两支被认可的片子——一支把照片满幅铺开、口播点到细节时推近（cover），一支把照片冲印成带白边的件摆在调查桌上、配黑底撕边标签。
-// 满幅一镜一张图时，镜头唯一能做的就是往里推，整片很容易变成一镜一推：只在那一处在当前景别读不清时才推，实拍录像本身在动就停住；
-// 要在几件素材之间走，把它们摆进同一张世界画布（MD.print 调查桌）用横移，见 references/镜头语言.md「真实素材满幅时」。
-// 约定：素材缺失一律报错（throw → render.py / qa.py 判失败），不静默画空白；所有参数由调用方用时间算好传进来，本库不读时钟。
+// Real material MD: put screenshots, photos and footage frames into the picture as the subject. When an explainer film has real material, make it the full-frame main image, with code explaining, annotating and moving the camera.
+// Source: two approved films — one spread photos full-frame and pushed in when the narration pointed to a detail (cover), the other printed photos as white-bordered prints laid on an investigation desk with torn-edge labels on black.
+// With one full-frame image per shot, the only thing the camera can do is push in, and the whole film easily becomes one push per shot: push only when that part can't be read at the current shot size, and hold when live footage moves on its own;
+// to move between several pieces of material, lay them on the same world canvas (the MD.print investigation desk) and pan; see references/camera-language.md "When real material is full-frame".
+// Convention: missing material always errors (throw → render.py / qa.py fail), never silently drawing blanks; the caller computes all parameters from time and passes them in, and this library never reads a clock.
 //
-//   MD.size(src)                                  素材的像素尺寸 [w, h]（图片 / 视频帧 / canvas 都行）；缺失或没加载完 → throw
-//   MD.cover(c, src, o) → geo                     满幅铺开：等比放大到盖满框（裁掉多出的边），按焦点裁、按 z 推近
-//       o = { x=0, y=0, w=画宽, h=画高（框）, fx=.5, fy=.5（焦点，0..1 相对素材：裁切和推近都绕它）, z=1（推近倍数，≥1）,
-//             crop:[sx,sy,sw,sh]（先取素材的这一块，0..1）, fit:'cover'|'contain'（contain = 整张放进框里、不裁，留边）, clip=true }
-//       返回 geo = { x, y, w, h（素材在画面上的矩形）, s（缩放）, box }，配 MD.toScreen 把素材上的点/框换算到画面
-//   MD.toScreen(geo, r)                           素材上 0..1 的点 [u,v] 或框 [u,v,w,h] → 画面坐标（[x,y] 或 {x,y,w,h}）
-//   MD.focusFor(rect) → {fx, fy}                  框 [u,v,w,h] 的中心当焦点
-//   MD.zoomFor(rect, iw, ih, bw, bh, fill=.6, fit='cover') → z    要让素材上的框 rect 占框宽/高的 fill，cover 之上还要推几倍（≥1）
-//   MD.print(c, src, w, h, o)                     冲印件：白边＋旧纸色＋投影＋胶带，原点在冲印件中心（调用方先 translate/rotate）
-//       o = { border=16·u, crop, fx, fy（按焦点 cover 进 w×h）, tape=true, caption（白边下方小字）, polaroid=false（底边加宽、caption 写在底边里）,
-//             shadow=true, key（给了 key 且素材是静态图就缓存成位图）}
-//   MD.label(c, text, x, y, o)                    黑底撕边标签：o = { size=48·u, fam='PuHui-Heavy', bg='#191817', fg='#f3efe6', align='left'|'center'|'right',
-//             t, at（at 这一帧出现：先 1.12 倍一拍再落定，字按 rate 字/秒、12fps 打出；不给 t 就直接画完整的）, rate=14, r（旋转）}
-//       返回 {w, h}
-//   MD.frameAt(frames, lt, fps=30, loop=false)    帧序列（图片数组）在片内时间 lt 的那一帧；缺帧 → throw
+//   MD.size(src)                                  the material's pixel size [w, h] (images / video frames / canvases all work); missing or not loaded → throw
+//   MD.cover(c, src, o) → geo                     full-frame spread: scaled proportionally to cover the box (cropping the excess), cropped around the focus, pushed in by z
+//       o = { x=0, y=0, w=frame width, h=frame height (the box), fx=.5, fy=.5 (focus, 0..1 relative to the material: cropping and pushing both pivot on it), z=1 (push factor, ≥1),
+//             crop:[sx,sy,sw,sh] (take this part of the material first, 0..1), fit:'cover'|'contain' (contain = the whole image in the box, uncropped, with margins), clip=true }
+//       returns geo = { x, y, w, h (the material's rectangle on screen), s (scale), box }; use with MD.toScreen to convert points/boxes on the material to the screen
+//   MD.toScreen(geo, r)                           a 0..1 point [u,v] or box [u,v,w,h] on the material → screen coordinates ([x,y] or {x,y,w,h})
+//   MD.focusFor(rect) → {fx, fy}                  the center of box [u,v,w,h] as the focus
+//   MD.zoomFor(rect, iw, ih, bw, bh, fill=.6, fit='cover') → z    how many more times to push in beyond cover (≥1) so the box rect on the material takes fill of the box width/height
+//   MD.print(c, src, w, h, o)                     photo print: white border + old-paper color + drop shadow + tape, origin at the print's center (the caller translates/rotates first)
+//       o = { border=16·u, crop, fx, fy (cover into w×h by focus), tape=true, caption (small text below the white border), polaroid=false (wider bottom border, caption written inside it),
+//             shadow=true, key (with a key and a static image, cache it as a bitmap)}
+//   MD.label(c, text, x, y, o)                    torn-edge label on black: o = { size=48·u, fam='PuHui-Heavy', bg='#191817', fg='#f3efe6', align='left'|'center'|'right',
+//             t, at (appears on the at frame: one beat at 1.12× then settles, with text typed at rate characters per second at 12fps; without t it's drawn complete), rate=14, r (rotation)}
+//       returns {w, h}
+//   MD.frameAt(frames, lt, fps=30, loop=false)    the frame of a frame sequence (image array) at in-clip time lt; missing frames → throw
 (() => {
-let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // 画布尺寸跟 U.setStage 走（默认 1920×1080）
+let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // canvas size follows U.setStage (default 1920×1080)
 const { clamp } = U;
 const MD = window.MD = {};
 const u0 = () => Math.min(W, H) / 1080;
 
 MD.size = src => {
-  if (!src) throw new Error('MD：素材缺失（图片没加载或路径写错）——不画空白帧');
+  if (!src) throw new Error('MD: material missing (the image didn\'t load or the path is wrong) — no blank frames are drawn');
   const w = src.videoWidth || src.naturalWidth || src.width, h = src.videoHeight || src.naturalHeight || src.height;
-  if (!(w > 0 && h > 0)) throw new Error(`MD：素材尺寸是 0（还没加载完或解不开）：${src.src || src.currentSrc || src}`);
+  if (!(w > 0 && h > 0)) throw new Error(`MD: material size is 0 (not loaded yet or undecodable): ${src.src || src.currentSrc || src}`);
   return [w, h];
 };
 
@@ -37,7 +37,7 @@ MD.cover = (c, src, o = {}) => {
   const bx = o.x ?? 0, by = o.y ?? 0, bw = o.w ?? W, bh = o.h ?? H, fx = o.fx ?? 0.5, fy = o.fy ?? 0.5, z = Math.max(1e-3, o.z ?? 1);
   const cr = o.crop || [0, 0, 1, 1], sx = cr[0] * iw0, sy = cr[1] * ih0, iw = cr[2] * iw0, ih = cr[3] * ih0;
   const s0 = (o.fit === 'contain' ? Math.min : Math.max)(bw / iw, bh / ih), s = s0 * z, w = iw * s, h = ih * s;
-  // 焦点：cover 时让焦点尽量落在框的同一相对位置（不露边）；推近绕焦点
+  // Focus: with cover, keep the focus at the same relative position in the box as far as possible (without showing edges); pushes pivot on the focus
   const ax = bx + bw * fx, ay = by + bh * fy;
   let x = ax - w * fx, y = ay - h * fy;
   if (o.fit !== 'contain') { x = Math.min(bx, Math.max(bx + bw - w, x)); y = Math.min(by, Math.max(by + bh - h, y)); }
@@ -64,7 +64,7 @@ MD.print = (c, src, w, h, o = {}) => {
     g.fillStyle = '#f7f5ef'; g.fillRect(0, 0, PW, PH);
     const f = o.crop ? null : MD.focusFor([o.fx ?? 0.5, o.fy ?? 0.5, 0, 0]);
     MD.cover(g, src, { x: b, y: b, w, h, crop: o.crop, fx: f ? f.fx : 0.5, fy: f ? f.fy : 0.5 });
-    g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(214,205,185,.16)'; g.fillRect(0, 0, PW, PH); g.restore();   // 印在纸上：压一层旧纸色
+    g.save(); g.globalCompositeOperation = 'multiply'; g.fillStyle = 'rgba(214,205,185,.16)'; g.fillRect(0, 0, PW, PH); g.restore();   // printed on paper: a layer of old-paper color
     if (o.polaroid && o.caption) { g.save(); g.fillStyle = '#2b2925'; g.font = `${Math.min(bot * 0.42, 40 * u)}px "LXGWWenKai-500", "PuHui-Medium"`; g.textBaseline = 'middle'; g.fillText(o.caption, b * 1.2, b + h + bot / 2); g.restore(); }
   };
   MD.size(src);
@@ -91,7 +91,7 @@ MD.label = (c, text, x, y, o = {}) => {
   const sp = labCache[key] || (labCache[key] = (() => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d');
     if (window.CL) CL.tornRect(g, w, h, [...text].length * 7 + Math.round(size), 3 * u); else { g.beginPath(); g.rect(0, 0, w, h); }
     g.fillStyle = bg; g.fill(); return cv; })());
-  const k = o.t != null && o.at != null ? MO.step(o.t - o.at + 1e-6, 12) : 1e9;     // 一拍二：从 at 起算，at 这一帧就是第一帧
+  const k = o.t != null && o.at != null ? MO.step(o.t - o.at + 1e-6, 12) : 1e9;     // on twos: counted from at, so the at frame is the first frame
   const pop = k < 1 / 12 ? 1.12 : 1, ox = o.align === 'center' ? -w / 2 : o.align === 'right' ? -w : 0;
   c.translate(x, y); if (o.r) c.rotate(o.r); c.scale(pop, pop);
   c.drawImage(sp, ox, -h / 2);
@@ -103,7 +103,7 @@ MD.label = (c, text, x, y, o = {}) => {
 };
 
 MD.frameAt = (frames, lt, fps = 30, loop = false) => {
-  if (!frames || !frames.length) throw new Error('MD.frameAt：帧序列是空的');
+  if (!frames || !frames.length) throw new Error('MD.frameAt: the frame sequence is empty');
   let i = Math.floor(Math.max(0, lt) * fps + 1e-6);
   i = loop ? i % frames.length : Math.min(frames.length - 1, i);
   const im = frames[i]; MD.size(im); return im;

@@ -1,10 +1,10 @@
-"""film_gate.py 的蓝紫底门禁：蓝紫帧占比 ≥0.30 红灯，--allow-blue-purple "理由" 降为黄灯。
+"""film_gate.py's blue-purple background gate: blue-purple frames ≥0.30 is red; --allow-blue-purple "reason" downgrades to yellow.
 
-只用 ffmpeg 的 lavfi 合成 6 秒小片（不需要引擎和 Playwright），每支都叠一层网格，免得被空画面门禁先拦：
-  purple —— 深紫底（#2A1A6E）整片                           → 红灯，报告给时间码
-  navy   —— 海军蓝平涂（#0D1B2A，色相约 210°）整片            → 不算蓝紫
-  paper  —— 纸色底（#F3EDE2）整片                           → 不算
-6 秒短于 20 秒，快动门禁只会黄灯；退出码 2 只可能来自蓝紫这一条（它不受短片降级）。
+Only ffmpeg's lavfi synthesizes 6-second clips (no engine or Playwright needed), each with a grid overlay so the empty-frame gate doesn't block it first:
+  purple — deep-purple background (#2A1A6E) throughout                        → red, with timecodes in the report
+  navy   — flat navy (#0D1B2A, hue about 210°) throughout                     → not blue-purple
+  paper  — paper-colored background (#F3EDE2) throughout                      → doesn't count
+6 seconds is shorter than 20, so the fast-motion gate only gives yellow; exit code 2 can only come from the blue-purple gate (which isn't downgraded for short clips).
 """
 import json
 import os
@@ -29,7 +29,7 @@ ENV = dict(os.environ, FILM_GATE_MIN_S='20')
 
 def setUpModule():
     if not all(shutil.which(x) for x in ('uv', 'ffmpeg', 'ffprobe')):
-        raise unittest.SkipTest('需要 uv、ffmpeg、ffprobe')
+        raise unittest.SkipTest('needs uv, ffmpeg, ffprobe')
     W['tmp'] = tempfile.TemporaryDirectory()
     for name, src in CLIPS.items():
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i', src, '-pix_fmt', 'yuv420p', '-c:v', 'libx264',
@@ -54,7 +54,7 @@ class BluePurpleGate(unittest.TestCase):
         self.assertGreaterEqual(r['blue_purple_share'], 0.9)
         self.assertEqual(r['lights']['blue_purple_share'], 'red')
         self.assertTrue(r['blue_purple_spans_s'])
-        self.assertIn('蓝紫', r['explain']['summary'])
+        self.assertIn('blue-purple', r['explain']['summary'])
 
     def test_navy_and_paper_pass(self):
         for name in ('navy', 'paper'):
@@ -63,10 +63,10 @@ class BluePurpleGate(unittest.TestCase):
             self.assertEqual(code, 0, name)
 
     def test_override_downgrades_to_yellow(self):
-        code, r = gate('purple', '--allow-blue-purple', '用户点名要赛博朋克紫')
+        code, r = gate('purple', '--allow-blue-purple', 'the user explicitly asked for cyberpunk purple')
         self.assertEqual(code, 0)
         self.assertEqual(r['lights']['blue_purple_share'], 'yellow')
-        self.assertEqual(r['allow_blue_purple'], '用户点名要赛博朋克紫')
+        self.assertEqual(r['allow_blue_purple'], 'the user explicitly asked for cyberpunk purple')
 
 
 if __name__ == '__main__':

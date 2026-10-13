@@ -1,12 +1,12 @@
-"""片段 spec 里的本地素材路径：找出来、核存在、改写成本地服务能取的 URL。render.py 用它（qa.py 可以照搬）。
+"""Local asset paths in a clip spec: find them, check they exist, rewrite them as URLs the local server can serve. Used by render.py (qa.py can copy it).
 
-认这些字段（路径相对 spec 文件，也可写绝对路径；data: / http(s): 原样放行）：
-  cues[].image                 一张图（截图、照片、录像的一帧）
-  cues[].frames                帧序列：目录（按文件名排序取 .png/.jpg/.jpeg/.webp）或路径数组；配 cues[].fps（默认 30）
-  data.image                   语法级的一张图（y1 用作中心物的图）
-  data.character               y4 角色：预设名（neutral / bun / author）原样放行（y4 已停用代码画的角色，启动时会报错要帧库）；目录 → 帧库（文件名去扩展名 = 姿势名）；
-                               对象 {frames: {姿势: 路径} | 目录} 同理
-文件不存在 → FileNotFoundError（调用方拒绝渲染，不出空白帧）。
+Recognized fields (paths relative to the spec file, absolute paths also work; data: / http(s): pass through unchanged):
+  cues[].image                 one image (a screenshot, photo, a frame of footage)
+  cues[].frames                frame sequence: a directory (.png/.jpg/.jpeg/.webp sorted by filename) or an array of paths; with cues[].fps (default 30)
+  data.image                   a grammar-level image (y1 uses it as the central object's image)
+  data.character               y4 character: preset names (neutral / bun / author) pass through unchanged (y4 has retired code-drawn characters and errors at startup asking for a frame library); a directory → frame library (filename without extension = pose name);
+                               an object {frames: {pose: path} | directory} likewise
+A missing file → FileNotFoundError (the caller refuses to render rather than outputting blank frames).
 """
 import urllib.parse
 from pathlib import Path
@@ -25,7 +25,7 @@ def _file(v, base, allowed, what):
         return v
     f = (base / v).resolve()
     if not f.is_file():
-        raise FileNotFoundError(f'spec 里的{what}不存在：{v}（相对 {base}）')
+        raise FileNotFoundError(f'The {what} in the spec does not exist: {v} (relative to {base})')
     return _url(f, allowed)
 
 
@@ -35,42 +35,42 @@ def _dir_frames(v, base, what):
         return None
     files = sorted(p for p in d.iterdir() if p.suffix.lower() in FRAME_EXT)
     if not files:
-        raise FileNotFoundError(f'spec 里的{what}目录是空的（没有 {"/".join(FRAME_EXT)}）：{v}')
+        raise FileNotFoundError(f'The {what} directory in the spec is empty (no {"/".join(FRAME_EXT)}): {v}')
     return files
 
 
 def localize(spec, base, allowed):
-    """原地改写 spec。base = spec 所在目录；allowed 收集允许服务的绝对路径。"""
+    """Rewrite the spec in place. base = the spec's directory; allowed collects the absolute paths allowed to be served."""
     base = Path(base)
     for q in spec.get('cues', []):
         if q.get('image'):
-            q['image'] = _file(q['image'], base, allowed, '图片')
+            q['image'] = _file(q['image'], base, allowed, 'image')
         fr = q.get('frames')
         if isinstance(fr, str):
-            files = _dir_frames(fr, base, '帧序列')
+            files = _dir_frames(fr, base, 'frame sequence')
             if files is None:
-                raise FileNotFoundError(f'spec 里的帧序列目录不存在：{fr}（相对 {base}）')
+                raise FileNotFoundError(f'The frame sequence directory in the spec does not exist: {fr} (relative to {base})')
             q['frames'] = [_url(f, allowed) for f in files]
         elif isinstance(fr, list):
             if not fr:
-                raise FileNotFoundError('spec 里的 frames 是空数组')
-            q['frames'] = [_file(v, base, allowed, '视频帧') for v in fr]
+                raise FileNotFoundError('frames in the spec is an empty array')
+            q['frames'] = [_file(v, base, allowed, 'video frame') for v in fr]
     data = spec.get('data') or {}
     if data.get('image'):
-        data['image'] = _file(data['image'], base, allowed, '图片')
+        data['image'] = _file(data['image'], base, allowed, 'image')
     ch = data.get('character')
     if isinstance(ch, str) and ch not in PRESETS:
-        files = _dir_frames(ch, base, '角色帧库')
+        files = _dir_frames(ch, base, 'character frame library')
         if files is None:
-            raise FileNotFoundError(f'data.character 既不是预设（{" / ".join(PRESETS)}）也不是帧库目录：{ch}（相对 {base}）')
+            raise FileNotFoundError(f'data.character is neither a preset ({" / ".join(PRESETS)}) nor a frame-library directory: {ch} (relative to {base})')
         data['character'] = {'frames': {f.stem: _url(f, allowed) for f in files}}
     elif isinstance(ch, dict):
         fr = ch.get('frames')
         if isinstance(fr, str):
-            files = _dir_frames(fr, base, '角色帧库')
+            files = _dir_frames(fr, base, 'character frame library')
             if files is None:
-                raise FileNotFoundError(f'data.character.frames 目录不存在：{fr}（相对 {base}）')
+                raise FileNotFoundError(f'The data.character.frames directory does not exist: {fr} (relative to {base})')
             ch['frames'] = {f.stem: _url(f, allowed) for f in files}
         elif isinstance(fr, dict):
-            ch['frames'] = {k: _file(v, base, allowed, f'角色帧「{k}」') for k, v in fr.items()}
+            ch['frames'] = {k: _file(v, base, allowed, f'character frame "{k}"') for k, v in fr.items()}
     return spec

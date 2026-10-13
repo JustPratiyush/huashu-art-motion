@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""可选语音配置。status/resolve不联网；个人配置位于skill安装目录外。"""
+"""Optional voice configuration. status/resolve don't go online; personal configuration lives outside the skill install directory."""
 import argparse
 from contextlib import contextmanager
 import copy
@@ -40,9 +40,9 @@ def read_json(path, missing=False):
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
-        raise ConfigError(f'无法读取配置：{path.name}（{type(e).__name__}）') from None
+        raise ConfigError(f'Cannot read configuration: {path.name} ({type(e).__name__})') from None
     if not isinstance(data, dict):
-        raise ConfigError('配置必须是JSON对象')
+        raise ConfigError('Configuration must be a JSON object')
     return data
 
 
@@ -54,27 +54,27 @@ def merge(base, patch):
 
 
 def validate(data, schema=None, where='config'):
-    # 本包schema只使用以下JSON Schema关键字；不声称实现通用schema解释器。
+    # This package's schema uses only the following JSON Schema keywords; it doesn't claim to implement a general schema interpreter.
     schema = schema or read_json(ROOT / 'schemas/media.schema.json')
     types = {'object': dict, 'string': str, 'integer': int, 'boolean': bool}
     typ = schema.get('type')
     if typ and (not isinstance(data, types[typ]) or (typ == 'integer' and isinstance(data, bool))):
-        raise ConfigError(f'{where}类型错误')
+        raise ConfigError(f'{where}: wrong type')
     if 'enum' in schema and data not in schema['enum']:
-        raise ConfigError(f'{where}不是支持的选项')
+        raise ConfigError(f'{where}: not a supported option')
     if isinstance(data, int) and not isinstance(data, bool):
         if data < schema.get('minimum', data) or data > schema.get('maximum', data):
-            raise ConfigError(f'{where}超出范围')
+            raise ConfigError(f'{where}: out of range')
     if isinstance(data, str) and 'pattern' in schema and not re.fullmatch(schema['pattern'], data):
-        raise ConfigError(f'{where}格式不正确')
+        raise ConfigError(f'{where}: invalid format')
     if isinstance(data, dict):
         for key in schema.get('required', []):
             if key not in data:
-                raise ConfigError(f'{where}.{key}缺失')
+                raise ConfigError(f'{where}.{key} is missing')
         for key, value in data.items():
             child = schema.get('properties', {}).get(key, schema.get('additionalProperties', False))
             if child is False:
-                raise ConfigError(f'{where}.{key}是不支持的字段')
+                raise ConfigError(f'{where}.{key} is not a supported field')
             if isinstance(child, dict):
                 validate(value, child, f'{where}.{key}')
 
@@ -82,11 +82,11 @@ def validate(data, schema=None, where='config'):
 def project_patch(data):
     validate(data)
     if set(data) - {'schema_version', 'revision', 'preferences', 'policy', 'onboarding'}:
-        raise ConfigError('项目配置不能设置凭证绑定、网络策略或供应商底层参数')
+        raise ConfigError('Project configuration cannot set credential bindings, network policy or low-level provider parameters')
     if any(v != 'deny' for v in data.get('policy', {}).values()):
-        raise ConfigError('项目policy只能收紧为deny，不能授予云调用、付费或训练权限')
+        raise ConfigError('A project policy can only tighten to deny; it cannot grant cloud, paid or training permissions')
     if 'voice_ref' in data.get('preferences', {}).get('voice', {}):
-        raise ConfigError('私人音色绑定保留在用户配置；本次可用--voice选择')
+        raise ConfigError('Private voice bindings stay in the user configuration; use --voice to choose one for this run')
     return data
 
 
@@ -120,7 +120,7 @@ def effective(explicit=None, project=None):
 def locked(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = path.with_name(path.name + '.lock')
-    # 内核文件锁在进程退出后释放；不通过删除锁文件争抢所有权。
+    # The kernel file lock is released when the process exits; ownership isn't contested by deleting the lock file.
     with lock_path.open('a+b') as lock:
         if os.name == 'nt':
             import msvcrt
@@ -148,13 +148,13 @@ def save_patch(path, patch, expected=None, reset=None):
         validate(old)
         revision = old.get('revision', 0)
         if expected is not None and revision != expected:
-            raise ConfigError('配置已被其他进程修改；请重读后重试')
+            raise ConfigError('Configuration was modified by another process; reread it and try again')
         updated = merge(old, patch)
         if reset:
-            # 只允许重置公开字段；不执行动态路径表达式。
+            # Only public fields may be reset; dynamic path expressions are not executed.
             keys = reset.split('.')
             if keys[0] not in {'preferences', 'policy', 'bindings', 'provider_options', 'onboarding'}:
-                raise ConfigError('不支持这个reset路径')
+                raise ConfigError('This reset path is not supported')
             current = updated
             for key in keys[:-1]:
                 current = current.get(key, {})
@@ -199,7 +199,7 @@ def speaker(config, explicit=None):
     if voice and voice.get('speaker_id'):
         return voice['speaker_id']
     if explicit and not voice:
-        # 兼容旧命令的注册表别名或平台ID。
+        # Registry aliases or platform IDs kept compatible with the legacy commands.
         voice = {'entry': explicit}
     voice = voice or {'entry': 'default'}
     registry_path = Path(voice.get('registry_file') or config['bindings']['volcengine']['registry_file']).expanduser()
@@ -217,74 +217,74 @@ def resolve(config, mode=None, audio=None, operation='synthesize', grants=(), vo
         chosen = 'provided'
     result = {'capability': 'voice', 'mode': chosen, 'operation': operation, 'status': 'ready', 'reasons': []}
     if chosen == 'off':
-        return dict(result, status='skipped', reasons=['语音已禁用，不生成音频'])
+        return dict(result, status='skipped', reasons=['Voice is disabled; no audio generated'])
     if chosen == 'unconfigured':
         return dict(result, status='needs_configuration', prompt=config['onboarding']['voice'] != 'manual',
-                    reasons=['选择现有录音、系统声音或已绑定的复刻音色；也可本次跳过'])
+                    reasons=['Choose an existing recording, a system voice or a bound cloned voice; or skip this time'])
     if chosen == 'provided':
         if not audio or not Path(audio).expanduser().is_file():
-            return dict(result, status='needs_input', reasons=['需要提供已有音频路径'])
+            return dict(result, status='needs_input', reasons=['An existing audio path is required'])
         return result
     if chosen == 'system':
         missing = [x for x in ('say', 'ffmpeg', 'ffprobe') if not shutil.which(x)]
         if platform.system() != 'Darwin' or missing:
-            return dict(result, status='unavailable', reasons=['系统声音目前仅支持macOS，需已安装say/ffmpeg/ffprobe'])
+            return dict(result, status='unavailable', reasons=['System voices currently support macOS only, with say/ffmpeg/ffprobe installed'])
         return dict(result, provider='macos')
     if chosen != 'clone':
-        raise ConfigError('不支持的声音方式')
+        raise ConfigError('Unsupported voice mode')
     result['provider'] = 'volcengine'
     if config['preferences']['voice'].get('provider', 'volcengine') != 'volcengine':
-        return dict(result, status='unavailable', reasons=['P1复刻后端仅支持volcengine'])
+        return dict(result, status='unavailable', reasons=['The P1 cloning backend only supports volcengine'])
     needs = ['cloud'] + ([] if operation == 'check' else ['paid_api'])
     if operation == 'train':
         needs.append('voice_training')
     denied = [key for key in needs if config['policy'][key] == 'deny']
     if denied:
-        return dict(result, status='blocked', reasons=['显式禁止：' + ', '.join(denied)])
+        return dict(result, status='blocked', reasons=['Explicitly forbidden: ' + ', '.join(denied)])
     pending = [key for key in needs if config['policy'][key] != 'allow' and key not in grants]
     if pending:
-        return dict(result, status='needs_permission', reasons=['需要本次授权：' + ', '.join(pending)])
+        return dict(result, status='needs_permission', reasons=['Authorization needed for this run: ' + ', '.join(pending)])
     appid, token = credentials(config)
     if not appid or not token:
-        result['reasons'].append('缺少所选供应商凭证；仅检查已指定环境/凭证文件')
+        result['reasons'].append('Missing credentials for the selected provider; only the specified environment/credential file is checked')
     if operation == 'synthesize' and not speaker(config, voice):
-        result['reasons'].append('没有可用音色绑定；可绑定已有ID，无须重训')
+        result['reasons'].append('No usable voice binding; an existing ID can be bound without retraining')
     missing = [x for x in ('ffmpeg', 'ffprobe') if not shutil.which(x)]
     if missing:
-        result['reasons'].append('缺少本地依赖：' + ', '.join(missing))
+        result['reasons'].append('Missing local dependencies: ' + ', '.join(missing))
     import importlib.util
     if importlib.util.find_spec('requests') is None:
-        result['reasons'].append('火山适配器需要requests；基础配置与已有音频不需要')
+        result['reasons'].append('The Volcengine adapter needs requests; basic configuration and existing audio do not')
     result['status'] = 'unavailable' if result['reasons'] else 'configured_unverified'
     return result
 
 
 def inspect_audio(path):
     if not shutil.which('ffprobe'):
-        raise ConfigError('音频验收需要ffprobe')
+        raise ConfigError('Audio acceptance needs ffprobe')
     proc = subprocess.run(['ffprobe', '-v', 'error', '-show_entries',
                            'stream=codec_type,codec_name,sample_rate,channels:format=duration', '-of', 'json', str(path)],
                           capture_output=True, text=True)
     if proc.returncode:
-        raise ConfigError('输出不是可解码音频')
+        raise ConfigError('Output is not decodable audio')
     data = json.loads(proc.stdout)
     streams = [s for s in data.get('streams', []) if s.get('codec_type') == 'audio']
     duration = float(data.get('format', {}).get('duration', 0))
     if not streams or duration <= 0:
-        raise ConfigError('输出没有有效音轨或时长')
+        raise ConfigError('Output has no valid audio track or duration')
     return {'duration': duration, **streams[0], 'sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
 
 
 def system_voice_for(text, configured=None):
     if configured:
         return configured
-    # macOS默认英文音色可能对中文返回近空音频；只从已安装音色选，不下载。
+    # macOS's default English voices may return near-empty audio for Chinese; choose only from installed voices, never download. English text uses the system default voice.
     if re.search(r"[\u4e00-\u9fff]", text):
         result = subprocess.run(['say', '-v', '?'], capture_output=True, text=True, check=True)
         names = [m.group(1).strip() for line in result.stdout.splitlines()
                  if (m := re.match(r"(.+?)\s+zh_CN\s+#", line))]
         if not names:
-            raise ConfigError('没有已安装的普通话系统声音；请选择已有音色或导入录音')
+            raise ConfigError('No Mandarin system voice is installed; choose an existing voice or import a recording')
         return 'Tingting' if 'Tingting' in names else names[0]
     return None
 
@@ -295,27 +295,27 @@ def run_say(args, config):
     if result['status'] not in ('ready', 'configured_unverified'):
         print(json.dumps(result, ensure_ascii=False)); raise SystemExit(2)
     if not args.text.strip():
-        raise ConfigError('合成文本不能为空')
+        raise ConfigError('Text to synthesize cannot be empty')
     out = Path(args.out).expanduser()
     if out.exists():
-        raise ConfigError('输出文件已存在，请指定新文件；保留已选音轨')
+        raise ConfigError('Output file already exists; specify a new file (the chosen track is kept)')
     if args.speech_rate is not None and not -50 <= args.speech_rate <= 100:
-        raise ConfigError('火山语速须在-50~100之间')
+        raise ConfigError('Volcengine speaking rate must be between -50 and 100')
     if args.fit is not None and args.fit <= 0:
-        raise ConfigError('--fit必须为正数')
+        raise ConfigError('--fit must be positive')
     if args.match and not Path(args.match).is_file():
-        raise ConfigError('找不到响度参考音频')
+        raise ConfigError('Loudness reference audio not found')
     requested_format = args.format
     out.parent.mkdir(parents=True, exist_ok=True)
     import koubo
-    # 临时工作区防止失败或半段响应污染最终产物。
+    # A temporary workspace keeps failures or half responses from contaminating the final output.
     with tempfile.TemporaryDirectory(prefix='voice-', dir=out.parent) as temp:
         staged = Path(temp) / (out.name + '.wav' if requested_format == 'pcm' else out.name)
         if result['mode'] == 'system':
             if args.model or args.speech_rate is not None or args.no_fidelity:
-                raise ConfigError('火山模型/语速参数不适用于系统声音')
+                raise ConfigError('Volcengine model/speaking-rate parameters do not apply to system voices')
             if args.format != 'wav' or args.sample_rate != 48000:
-                raise ConfigError('P1系统声音输出固定为48kHz WAV')
+                raise ConfigError('P1 system voice output is fixed at 48kHz WAV')
             source = Path(temp) / 'system.aiff'
             cmd = ['say', '-o', str(source)]
             system_voice = system_voice_for(args.text, args.voice or config['preferences']['voice'].get('system_voice'))
@@ -332,7 +332,7 @@ def run_say(args, config):
             koubo.configure_backend(config)
             args = copy.copy(args)
             args.out = str(staged)
-            # 先用容器音频完成拟合/电平/终止状态验收，再导出裸PCM。
+            # First accept fitting/level/termination status on container audio, then export raw PCM.
             if requested_format == 'pcm': args.format = 'wav'
             args.voice = speaker(config, args.voice)
             opts = config['provider_options']['volcengine']
@@ -343,13 +343,13 @@ def run_say(args, config):
         artifact = inspect_audio(staged)
         volume = koubo.mean_volume(staged)
         if artifact['duration'] < 0.12 or volume is None or volume < -60:
-            raise ConfigError('合成音频近空或无有效声音，不作为成功产物')
+            raise ConfigError('Synthesized audio is near-empty or has no valid sound; not treated as a successful output')
         if args.fit and abs(artifact['duration'] - args.fit) > .05:
-            # 保留诊断候选，但不把它当成合格的最终输出。
+            # Keep the diagnostic candidate, but don't treat it as a qualified final output.
             candidate = out.with_name(out.stem + '.unfitted' + out.suffix)
             if not candidate.exists():
                 shutil.copy2(staged, candidate)
-            raise ConfigError('音频未落入目标时长±0.05秒，已保留unfitted候选；未交付为最终音频')
+            raise ConfigError('Audio did not land within ±0.05 seconds of the target duration; the unfitted candidate was kept and not delivered as final audio')
         if requested_format == 'pcm':
             raw = Path(temp) / 'output.pcm'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(staged), '-ac', '1', '-ar', str(args.sample_rate), '-f', 's16le', str(raw)], check=True)
@@ -370,7 +370,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] in ('image-status', 'image-plan', 'accept-image', 'use-image'):
         import images
         return images.main()
-    # 生成/训练命令共用原CLI，避免两套参数漂移。
+    # Generation/training commands share the original CLI to avoid two parameter sets drifting apart.
     if len(sys.argv) > 1 and sys.argv[1] in ('say', 'train', 'voices'):
         import koubo
         return koubo.main()
@@ -410,7 +410,7 @@ def main():
         patch = read_json(Path(args.input))
         if args.scope == 'project':
             if not args.project:
-                raise ConfigError('project作用域需要--project')
+                raise ConfigError('project scope needs --project')
             path = Path(args.project).expanduser().resolve() / '.huashu/media.json'
             project_patch(patch)
         print(json.dumps(save_patch(path, patch, args.expected_revision), ensure_ascii=False))
@@ -430,7 +430,7 @@ def main():
         source, out = Path(args.audio).expanduser(), Path(args.out).expanduser()
         info = inspect_audio(source)
         if out.exists():
-            raise ConfigError('输出已存在，请指定新文件')
+            raise ConfigError('Output already exists; specify a new file')
         out.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, out)
         info.update(path=out.name, generated=False, mode='provided')
         out.with_name(out.name + '.json').write_text(json.dumps(info, ensure_ascii=False, indent=2))

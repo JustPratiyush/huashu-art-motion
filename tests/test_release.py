@@ -34,7 +34,7 @@ class ReleaseTests(unittest.TestCase):
         secret.rename(Path(self.tmp.name).parent/(Path(self.tmp.name).name+'-fixture-archive'))
         self.addCleanup(lambda: (Path(self.tmp.name).parent/(Path(self.tmp.name).name+'-fixture-archive')).unlink(missing_ok=True))
         self.git('add','-u');self.manifest();self.git('commit','-qm','remove')
-        with self.assertRaisesRegex(ValueError,'凭据'):gate.check(self.repo,'HEAD',self.base)
+        with self.assertRaisesRegex(ValueError,'credential'):gate.check(self.repo,'HEAD',self.base)
 
     def test_private_filename_rejected(self):
         (self.repo/'voices.json').write_text('{}');self.git('add','voices.json')
@@ -57,14 +57,14 @@ class ReleaseTests(unittest.TestCase):
 
     def test_secret_in_commit_message_is_rejected(self):
         self.manifest();self.git('commit','-qm','message '+'ghp_'+'z'*40)
-        with self.assertRaisesRegex(ValueError,'提交元数据'):gate.check(self.repo,'HEAD',self.base)
+        with self.assertRaisesRegex(ValueError,'Commit metadata'):gate.check(self.repo,'HEAD',self.base)
 
     def test_replace_object_cannot_hide_secret(self):
         secret=self.repo/'hidden.txt';secret.write_text('ghp_'+'b'*40);self.git('add','hidden.txt');self.git('commit','-qm','leak')
         blob=self.git('rev-parse','HEAD:hidden.txt').decode().strip()
         clean=subprocess.check_output(['git','-C',str(self.repo),'hash-object','-w','--stdin'],input=b'clean').decode().strip()
         self.git('replace',blob,clean)
-        with self.assertRaisesRegex(ValueError,'凭据'):gate.inspect(self.repo,'HEAD')
+        with self.assertRaisesRegex(ValueError,'credential'):gate.inspect(self.repo,'HEAD')
 
 
     def test_secret_in_deleted_filename_is_rejected(self):
@@ -73,7 +73,7 @@ class ReleaseTests(unittest.TestCase):
         archive=Path(self.tmp.name).parent/(Path(self.tmp.name).name+'-filename-archive');file.rename(archive)
         self.addCleanup(lambda: archive.unlink(missing_ok=True))
         self.git('add','-u');self.manifest();self.git('commit','-qm','remove filename')
-        with self.assertRaisesRegex(ValueError,'路径名') as error:gate.check(self.repo,'HEAD',self.base)
+        with self.assertRaisesRegex(ValueError,'path name') as error:gate.check(self.repo,'HEAD',self.base)
         self.assertNotIn(name,str(error.exception))
 
 if __name__=='__main__':unittest.main()

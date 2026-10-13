@@ -8,10 +8,10 @@
  "data": {
   "character": {
    "frames": {
-    "rest": "../../../角色帧库/<你的角色>/rest.png",
-    "talk": "../../../角色帧库/<你的角色>/talk.png",
-    "point": "../../../角色帧库/<你的角色>/point.png",
-    "shrug": "../../../角色帧库/<你的角色>/shrug.png"
+    "rest": "../../../character-frames/<your-character>/rest.png",
+    "talk": "../../../character-frames/<your-character>/talk.png",
+    "point": "../../../character-frames/<your-character>/point.png",
+    "shrug": "../../../character-frames/<your-character>/shrug.png"
    }
   }
  },
@@ -19,12 +19,12 @@
   {
    "at": 0.1,
    "kind": "insert",
-   "text": "3000行",
-   "sub": "帮我做个网站",
+   "text": "3,000 lines",
+   "sub": "Build me a website",
    "data": {
     "hit": 1.6,
     "count": 3000,
-    "unit": "行"
+    "unit": " lines"
    }
   },
   {
@@ -34,8 +34,8 @@
   {
    "at": 4.1,
    "kind": "point",
-   "text": "第一次让 AI 写代码，",
-   "sub": "这些……贴哪儿？",
+   "text": "First time letting AI write code,",
+   "sub": "Where do I paste this…?",
    "data": {
     "pose": "point"
    }
@@ -44,9 +44,9 @@
    "at": 6.6,
    "kind": "highlight",
    "data": {
-    "mark": "？"
+    "mark": "?"
    }
   }
  ],
- "_note": "y4 必须用你自己的角色帧库（AI 生帧，见 references/10-角色.md 与 角色精细度.md）。把 <你的角色> 换成你的帧库；没有生图能力就别用 y4。"
+ "_note": "y4 must use your own character frame library (AI-generated frames; see references/10-characters.md and character-detail.md). Replace <your-character> with your frame library; without image generation, don't use y4."
 }

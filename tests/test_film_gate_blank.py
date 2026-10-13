@@ -1,12 +1,12 @@
-"""film_gate.py 的空画面硬伤：中段近乎纯色（整帧几乎没有边缘）连续 ≥0.3 秒红灯，报告给时间码。
+"""film_gate.py's empty-frame defect: a near-solid frame mid-film (almost no edges in the whole frame) for ≥0.3 seconds is red, with timecodes in the report.
 
-只用 ffmpeg 的 lavfi 合成 6 秒小片（不需要引擎和 Playwright）：
-  orange  —— 有纹理的测试图，中间 0.6 秒切成纯橙色           → 红灯，时间码落在那 0.6 秒上
-  flash   —— 同上，但只有 0.2 秒全黑                         → 不算（短于 0.3 秒）
-  head    —— 开头 0.4 秒纯色，之后有纹理                       → 不算（首尾各 0.5 秒不查）
-  dark    —— 黑底、淡网格、两条细亮线（3b1b 那种）             → 不算
-  board   —— 白底、几个细黑框（白板那种）                       → 不算
-6 秒的片子短于 20 秒，快动门禁只会黄灯；退出码 2 只可能来自空画面这一条（它不受短片降级）。
+Only ffmpeg's lavfi synthesizes 6-second clips (no engine or Playwright needed):
+  orange  — a textured test image, cut to solid orange for 0.6 seconds in the middle   → red, timecode on those 0.6 seconds
+  flash   — the same, but only 0.2 seconds of solid black                             → doesn't count (shorter than 0.3 seconds)
+  head    — 0.4 seconds of solid color at the start, then texture                     → doesn't count (0.5 seconds at each end aren't checked)
+  dark    — black background, faint grid, two thin bright lines (the 3b1b kind)        → doesn't count
+  board   — white background, a few thin black boxes (the whiteboard kind)             → doesn't count
+A 6-second film is shorter than 20 seconds, so the fast-motion gate only gives yellow; exit code 2 can only come from the empty-frame gate (which isn't downgraded for short clips).
 """
 import json
 import os
@@ -32,12 +32,12 @@ CLIPS = {
 }
 
 W = {}
-ENV = dict(os.environ, FILM_GATE_MIN_S='20')   # 别的测试模块会把它设成 0；这里要的就是默认的短片降级
+ENV = dict(os.environ, FILM_GATE_MIN_S='20')   # other test modules set it to 0; here we want the default short-clip downgrade
 
 
 def setUpModule():
     if not all(shutil.which(x) for x in ('uv', 'ffmpeg', 'ffprobe')):
-        raise unittest.SkipTest('需要 uv、ffmpeg、ffprobe')
+        raise unittest.SkipTest('needs uv, ffmpeg, ffprobe')
     W['tmp'] = tempfile.TemporaryDirectory()
     tmp = Path(W['tmp'].name)
     for name, parts in CLIPS.items():
@@ -75,15 +75,15 @@ class BlankFrames(unittest.TestCase):
         a, b = res['blank_runs_s'][0]
         self.assertTrue(2.3 <= a <= 2.65 and 2.75 <= b <= 3.1, (a, b))
         self.assertGreaterEqual(res['blank_run_s'], 0.3)
-        self.assertIn('空画面', res['explain']['summary'])
+        self.assertIn('empty stretch', res['explain']['summary'])
         self.assertIn(f'{a:.2f}', res['explain']['summary'])
-        self.assertIn('主角或主物', res['explain']['fix'])
+        self.assertIn('protagonist or main object', res['explain']['fix'])
 
     def test_text_report_lists_timecodes(self):
         r = gate('orange')
         self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertIn('空画面时间码', r.stdout)
-        self.assertIn('怎么改', r.stdout)
+        self.assertIn('Empty-frame timecodes', r.stdout)
+        self.assertIn('How to fix', r.stdout)
 
     def test_short_flash_is_not_blank(self):
         code, res = gate_json('flash')
@@ -98,12 +98,12 @@ class BlankFrames(unittest.TestCase):
 
     def test_dark_3b1b_like_is_not_blank(self):
         code, res = gate_json('dark')
-        self.assertEqual(res['blank_runs_s'], [], '黑底细线不是空画面')
+        self.assertEqual(res['blank_runs_s'], [], 'thin lines on black are not an empty frame')
         self.assertEqual(code, 0)
 
     def test_whiteboard_like_is_not_blank(self):
         code, res = gate_json('board')
-        self.assertEqual(res['blank_runs_s'], [], '白底细笔画不是空画面')
+        self.assertEqual(res['blank_runs_s'], [], 'thin strokes on white are not an empty frame')
         self.assertEqual(code, 0)
 
     def test_deliver_refuses_blank(self):
@@ -112,7 +112,7 @@ class BlankFrames(unittest.TestCase):
                            capture_output=True, text=True, timeout=600, env=ENV)
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         self.assertFalse((out / 'orange.mp4').exists())
-        self.assertIn('空画面', r.stdout)
+        self.assertIn('empty stretch', r.stdout)
 
 
 if __name__ == '__main__':

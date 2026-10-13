@@ -6,9 +6,9 @@
   "height": 1080,
   "theme": "paper",
   "data": {
-    "title": "英伟达营收涨到 7.8 倍",
-    "unit": "年营收，十亿美元（2021–2025 财年）",
-    "source": "来源：英伟达 2021–2025 财年 10-K 年报（财年截至次年 1 月）",
+    "title": "NVIDIA revenue grew 7.8×",
+    "unit": "Annual revenue, $ billions (FY2021–FY2025)",
+    "source": "Source: NVIDIA FY2021–FY2025 10-K annual reports (fiscal years end in January of the following year)",
     "chart": "bar",
     "decimals": 1,
     "series": [
@@ -18,7 +18,7 @@
       { "label": "FY2024", "value": 60.92 },
       { "label": "FY2025", "value": 130.50 }
     ],
-    "highlight": { "index": 4, "text": "7.8 倍", "sub": "130.5 ÷ 16.7" }
+    "highlight": { "index": 4, "text": "7.8×", "sub": "130.5 ÷ 16.7" }
   },
   "cues": [
     { "at": 0.3, "kind": "bar", "data": { "index": [0, 1, 2] } },

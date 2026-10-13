@@ -197,16 +197,16 @@ class MediaConfigTests(unittest.TestCase):
         self.assertAlmostEqual(meta['duration'],.25)
 
     def test_chinese_uses_installed_voice_only(self):
-        result=subprocess.CompletedProcess([],0,'Alex en_US # Hello\nTingting zh_CN # 你好\n','')
+        result=subprocess.CompletedProcess([],0,'Alex en_US # Hello\nTingting zh_CN # \u4f60\u597d\n','')
         with patch.object(c.subprocess,'run',return_value=result) as run:
-            self.assertEqual(c.system_voice_for('中文'),'Tingting')
+            self.assertEqual(c.system_voice_for('\u4e2d\u6587'),'Tingting')   # Chinese text picks an installed Mandarin voice
             self.assertEqual(run.call_args.args[0],['say','-v','?'])
         with patch.object(c.subprocess,'run',return_value=subprocess.CompletedProcess([],0,'Alex en_US # Hello\n','')):
-            with self.assertRaises(c.ConfigError):c.system_voice_for('中文')
+            with self.assertRaises(c.ConfigError):c.system_voice_for('\u4e2d\u6587')
 
     def test_near_empty_system_audio_not_delivered(self):
         import argparse
-        args=argparse.Namespace(mode='system',voice=None,out=str(self.root/'silent.wav'),text='中文文本',fit=None,match=None,
+        args=argparse.Namespace(mode='system',voice=None,out=str(self.root/'silent.wav'),text='\u4e2d\u6587\u6587\u672c',fit=None,match=None,
              match_ss=None,match_t=None,loudness=None,format='wav',sample_rate=48000,model=None,speech_rate=None,no_fidelity=None,
              allow_cloud=False,allow_paid_api=False)
         with patch.object(c,'resolve',return_value={'status':'ready','mode':'system','provider':'macos'}),patch.object(c,'system_voice_for',return_value='Tingting'),patch.object(c.subprocess,'run'),patch.object(c,'inspect_audio',return_value={'duration':.01}),patch.object(koubo,'mean_volume',return_value=-20):

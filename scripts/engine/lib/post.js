@@ -1,21 +1,21 @@
-// 后期：整幅叠在画面上的「媒介层」。全部挂在 PAINT（P）上。
-// 来源：迁移测试 B（蒸汽波 VHS、吉卜力角色水彩肌理）、D（橡皮管胶片、新海诚泛光/光晕）、A（敦煌褪色）。
-//   P.rgbSplit(c, S, opt)               RGB 三通道分离错位：multiply 取单通道 → lighter 合成到黑底（VHS、故障、3D 眼镜）
-//   P.vhs(c, S, t, lt, opt)             VHS 全套：通道分离＋跟踪噪声带下滚撕裂＋扫描线＋OSD＋暗角（先把整幅画进离屏 S）
-//   P.scanlines(c, a1, a2)              4px 扫描线 pattern
-//   P.film(c, t, opt)                   老胶片层：24fps 闪烁、跨格存活的竖划痕、灰尘毛发、颗粒抖动、圆角片门（1930 卡通、默片）
-//   P.gateWeave(c, t, fn, amp)          抖片：fn 里画的内容整体按 24fps 微抖
-//   P.bloom(c, opt)                     泛光：整帧缩小糊化后 screen 回叠（新海诚、CG）
-//   P.lensFlare(c, sun, t, opt)         镜头光晕：太阳核＋慢转星芒＋横向拉丝＋沿 太阳→画心 的六边形光斑
-//   P.textureInside(c, shapeLayer, drawTex, opt)  纹理只「乘」在角色上：纹理层 destination-in 角色剪影 → multiply 叠回
-//   P.fade(c, opt)                      褪色/单色化：saturation 混合去色＋multiply 染色（壁画褪色、胶片单色）
-//   P.vignette(c, opt)                  径向暗角
+// Post-processing: "media layers" laid over the whole picture. All attached to PAINT (P).
+// Sources: migration tests B (vaporwave VHS, Ghibli character watercolor texture), D (rubber hose film, Shinkai bloom/lens flare), A (Dunhuang fading).
+//   P.rgbSplit(c, S, opt)               RGB channel split and offset: multiply extracts single channels → lighter composites onto black (VHS, glitch, 3D glasses)
+//   P.vhs(c, S, t, lt, opt)             the full VHS set: channel split + rolling tracking-noise tear band + scanlines + OSD + vignette (first draw the whole picture into an offscreen S)
+//   P.scanlines(c, a1, a2)              4px scanline pattern
+//   P.film(c, t, opt)                   old-film layer: 24fps flicker, vertical scratches surviving across frames, dust and hairs, grain jitter, rounded film gate (1930s cartoons, silent films)
+//   P.gateWeave(c, t, fn, amp)          gate weave: content drawn in fn shakes slightly as a whole at 24fps
+//   P.bloom(c, opt)                     bloom: the whole frame shrunk and blurred, then screen-composited back (Shinkai, CG)
+//   P.lensFlare(c, sun, t, opt)         lens flare: sun core + slowly rotating star rays + horizontal streak + hexagonal spots along sun → image center
+//   P.textureInside(c, shapeLayer, drawTex, opt)  texture "multiplied" only onto characters: texture layer destination-in the character silhouette → multiply back
+//   P.fade(c, opt)                      fading / monochrome: saturation blend to desaturate + multiply to tint (mural fading, monochrome film)
+//   P.vignette(c, opt)                  radial vignette
 (() => {
-let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // 画布尺寸跟 U.setStage 走（默认 1920×1080）
+let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // canvas size follows U.setStage (default 1920×1080)
 const P = window.PAINT;
 const { rng } = U;
 
-// ---------- 通道分离 / VHS ----------
+// ---------- channel split / VHS ----------
 P.rgbSplit = (c, S, { r = [-3, 0], g = [0, 0], b = [3, 1], key = 'rgbSplit' } = {}) => {
   const T = P.scratch(key), tg = T.getContext('2d');
   c.save(); c.fillStyle = '#000'; c.fillRect(0, 0, W, H); c.globalCompositeOperation = 'lighter';
@@ -30,12 +30,12 @@ P.scanlines = (c, a1 = 0.28, a2 = 0.12) => {
   const tile = P.cached(`scan_${a1}_${a2}`, 4, 4, g => { g.fillStyle = `rgba(0,0,0,${a1})`; g.fillRect(0, 0, 4, 1); g.fillStyle = `rgba(0,0,0,${a2})`; g.fillRect(0, 2, 4, 1); });
   c.save(); c.fillStyle = c.createPattern(tile, 'repeat'); c.fillRect(0, 0, W, H); c.restore();
 };
-// osd: false 关掉；或 {label:'PLAY', date:'SEP. 04 2011', clock:'23:59', font:'PressStart2P-400'}（▶ 自己画：像素字体里没有这个字形）
+// osd: false turns it off; or {label:'PLAY', date:'SEP. 04 2011', clock:'23:59', font:'PressStart2P-400'} (▶ is drawn by hand: the pixel font has no such glyph)
 P.vhs = (c, S, t, lt, { osd = {}, band = 70, bandSpeed = 520, vignette = 'rgba(10,0,25,.55)' } = {}) => {
   const f = Math.floor(t * 60), jit = U.hash(f >> 2, 9) < 0.12 ? 1 : 0;
-  const ca = 3 + jit * 6 + Math.sin(t * 7) * 1.5;                          // 色差错位量（偶发加大）
+  const ca = 3 + jit * 6 + Math.sin(t * 7) * 1.5;                          // chromatic offset amount (occasionally larger)
   P.rgbSplit(c, S, { r: [-ca, 0], g: [0, 0], b: [ca, 1], key: 'vhsSplit' });
-  // 跟踪噪声带：从上往下滚，带内每 6px 横向撕裂＋白噪声线
+  // Tracking-noise band: rolling from top to bottom, with horizontal tearing every 6px inside the band + white noise lines
   const by = ((lt * bandSpeed + 200) % (H + 160)) - 80, bh = band, r = rng(f * 7 + 1);
   for (let y = by; y < by + bh; y += 6) { const dx = (r() - 0.5) * 60 * Math.sin((y - by) / bh * Math.PI); c.drawImage(S, 0, y, W, 6, dx, y, W, 6); }
   c.save(); c.globalAlpha = 0.5; for (let i = 0; i < 90; i++) { c.fillStyle = r() < 0.5 ? '#ffffff' : '#bbbbbb'; c.fillRect(r() * W, by + r() * bh, 20 + r() * 120, 1.5); } c.restore();
@@ -50,12 +50,12 @@ P.vhs = (c, S, t, lt, { osd = {}, band = 70, bandSpeed = 520, vignette = 'rgba(1
   if (vignette) P.vignette(c, { inner: 500, outer: 1150, col: vignette });
 };
 
-// ---------- 胶片 ----------
+// ---------- film ----------
 P.film = (c, t, { fps = 24, flicker = [0.02, 0.07, 0.06], scratches = 3, dust = 14, grain = 'film', grainDensity = 0.18, gate = true, ink = '20,16,10', light = '255,252,240' } = {}) => {
   const fq = Math.floor(t * fps), r = rng(fq * 7919 + 11);
   c.fillStyle = `rgba(255,250,235,${flicker[0] + r() * flicker[1]})`; c.fillRect(0, 0, W, H);
   c.fillStyle = `rgba(${ink},${r() * flicker[2]})`; c.fillRect(0, 0, W, H);
-  // 竖划痕：用 floor(t*6) 当寿命，一条划痕能活好几格
+  // Vertical scratches: floor(t*6) as the lifetime, so one scratch can live for several frames
   const r6 = rng(Math.floor(t * 6) * 131 + 5);
   for (let k = 0; k < scratches; k++) { const x = r6() * W + (r() - 0.5) * 6; c.strokeStyle = r6() < 0.5 ? `rgba(${light},.55)` : `rgba(${ink},.5)`; c.lineWidth = 1 + r6() * 2; c.beginPath(); c.moveTo(x, 0); c.lineTo(x + (r() - 0.5) * 12, H); c.stroke(); }
   for (let k = 0; k < dust; k++) { c.fillStyle = r() < 0.6 ? `rgba(${ink},.7)` : `rgba(${light},.8)`; c.beginPath(); c.arc(r() * W, r() * H, 1 + r() * 3.5, 0, 7); c.fill(); }
@@ -68,13 +68,13 @@ P.film = (c, t, { fps = 24, flicker = [0.02, 0.07, 0.06], scratches = 3, dust = 
 };
 P.gateWeave = (c, t, fn, amp = [3, 4], fps = 24) => { const r = rng(Math.floor(t * fps) * 31 + 7); c.save(); c.translate((r() - 0.5) * amp[0], (r() - 0.5) * amp[1]); fn(); c.restore(); };
 
-// ---------- 光 ----------
+// ---------- light ----------
 P.bloom = (c, { scale = 4, blur = 6, brightness = 1.1, alpha = 0.28, key = 'bloom' } = {}) => {
   const w = W / scale, h = H / scale, bl = P.scratch(key), g = bl.getContext('2d'); g.reset();
   g.filter = `blur(${blur}px) brightness(${brightness})`; g.drawImage(c.canvas, 0, 0, w, h);
   c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = alpha; c.drawImage(bl, 0, 0, w, h, 0, 0, W, H); c.restore();
 };
-// 坑：太阳要放在玻璃里面、核半径 ≤130，否则光晕溢到墙上像墙上挂了盏灯；横丝别超过 ~840px，否则像 bug 线。
+// Pitfall: the sun must sit inside the glass with a core radius ≤130, otherwise the flare spills onto the wall like a lamp hanging there; keep the horizontal streak under ~840px, or it looks like a bug line.
 P.lensFlare = (c, sun, t, { core = 130, rays = 10, streak = 840, ghosts = [[0.45, 34, '120,255,200', 0.09], [0.75, 18, '255,180,120', 0.12], [1.25, 56, '140,170,255', 0.06], [1.6, 24, '255,140,220', 0.09], [2.0, 90, '120,220,255', 0.04]] } = {}) => {
   c.save(); c.globalCompositeOperation = 'lighter';
   const sg = c.createRadialGradient(...sun, 0, ...sun, core); sg.addColorStop(0, 'rgba(255,255,250,.95)'); sg.addColorStop(0.18, 'rgba(255,248,220,.55)'); sg.addColorStop(1, 'rgba(255,230,180,0)'); c.fillStyle = sg; c.beginPath(); c.arc(...sun, core, 0, 7); c.fill();
@@ -86,9 +86,9 @@ P.lensFlare = (c, sun, t, { core = 130, rays = 10, streak = 840, ghosts = [[0.45
   c.restore();
 };
 
-// ---------- 纹理叠在角色上 ----------
-// shapeLayer：只画了角色的离屏（透明底）；drawTex(g) 往纹理层上画纸纹/颗粒/色晕。
-// 坑：直接 source-atop 叠纸纹会把纸的颜色盖上去，人物整体发白；正确做法是纹理层 destination-in 角色剪影，再 multiply 叠回（迁移测试 B）。
+// ---------- texture over characters ----------
+// shapeLayer: an offscreen layer with only the characters drawn (transparent background); drawTex(g) paints paper texture / grain / color blooms onto the texture layer.
+// Pitfall: laying paper texture directly with source-atop covers the figures with the paper's color, making them whitish; the right way is texture layer destination-in the character silhouette, then multiply back (migration test B).
 P.textureInside = (c, shapeLayer, drawTex, { op = 'multiply', alpha = 1, key = 'texInside' } = {}) => {
   const M = P.scratch(key), mg = M.getContext('2d'); mg.reset(); mg.clearRect(0, 0, W, H);
   drawTex(mg);
@@ -96,8 +96,8 @@ P.textureInside = (c, shapeLayer, drawTex, { op = 'multiply', alpha = 1, key = '
   c.save(); c.globalCompositeOperation = op; c.globalAlpha = alpha; c.drawImage(M, 0, 0); c.restore();
 };
 
-// ---------- 色调 ----------
-// sat: saturation 混合灰的 α（1 = 完全去色）；tint: multiply 一层颜色（暖灰 '#f2e8d2' = 老胶片；土色纹理 = 壁画）
+// ---------- tone ----------
+// sat: α of the saturation-blended gray (1 = fully desaturated); tint: multiply a layer of color (warm gray '#f2e8d2' = old film; earthen texture = murals)
 P.fade = (c, { sat = 1, tint } = {}) => {
   c.save(); c.globalCompositeOperation = 'saturation'; c.fillStyle = `rgba(128,128,128,${sat})`; c.fillRect(0, 0, W, H); c.restore();
   if (tint) { c.save(); c.globalCompositeOperation = 'multiply'; c.fillStyle = tint; c.fillRect(0, 0, W, H); c.restore(); }

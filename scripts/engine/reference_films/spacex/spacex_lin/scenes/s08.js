@@ -1,6 +1,6 @@
-// S08 · 发射越来越密（数据段，纸面往上滚三屏）：① 可爱柱状图：猎鹰火箭年发射次数 2017 / 2022–2025 依次长出（2017 与 2022 之间断轴），
-// 念到 2025 其余变灰，165 计数落定＋红圈 ② 两周小日历里每隔两天多冒出一枚小火箭「平均两天多一发」；天平：猎鹰9号这边比「全世界其他火箭」更沉
-// ③ 一枚助推器＋37 个小火箭图标逐个点亮（Isotype），「37次」。数据只用核对表第 16–18 条。转场：整页左推（lin_slide）。
+// S08 · launches getting denser (data segment, the paper scrolling up through three screens): ① cute bar chart: Falcon launches per year, 2017 / 2022–2025 growing one by one (a broken axis between 2017 and 2022),
+// the others turning gray when 2025 is spoken, the 165 count landing + red circle ② in a two-week mini calendar a little rocket pops up every two-plus days, "more than one launch every two and a half days"; a balance scale: the Falcon 9 side is heavier than "all the world's other rockets"
+// ③ one booster + 37 little rocket icons lighting up one by one (Isotype), "37 times". Data only from fact-check items 16–18. Transition: the whole page pushes left (lin_slide).
 (() => {
 const ID = 's08', L = LIN, { C, TAU } = L, { clamp, lerp } = U;
 let Q = null;
@@ -13,14 +13,14 @@ const BASE = 790, KH = 2.85, BW = 128;
 function pageA(g, lt) {
   const Qv = q();
   const hiK = clamp((lt - Qv.y25) / 0.35);
-  // 2025 柱的计数：从「2025年」开始爬，念到「165」那个字时落定；落定后才圈、才放大
+  // Count on the 2025 bar: starts climbing at "2025" and lands on the character "165"; only after landing does it get circled and scaled up
   const t5 = Qv.y25 - 0.4, land = Qv.n165 + 0.12, vp5 = MO.cubicOut(clamp((lt - t5) / (land - t5)));
   const hit = lt - land, punch = hit > 0 ? MO.settle(hit, 0.18, 2.5, 6) : 0;
-  // 镜头：落定那一下推近 2025 柱，停住，翻页前拉回
+  // Camera: pushes in on the 2025 bar at the landing, holds, pulls back before the page turn
   const push = MO.cubicInOut(clamp((lt - (land - 0.15)) / 0.45)) * (1 - MO.cubicInOut(clamp((lt - (Qv.pj + 0.25)) / 0.35)));
-  const dimAll = 0.82 * push;   // 大数字砸入时，整张图退到背景
+  const dimAll = 0.82 * push;   // When the big number slams in, the whole chart recedes into the background
   g.save(); g.globalAlpha *= 1 - dimAll;
-  // 底线＋断轴
+  // Baseline + broken axis
   const ax = MO.cubicOut(clamp((lt - 0.05) / 0.45));
   g.save(); g.lineCap = 'round'; g.strokeStyle = C.ink; g.lineWidth = 6; g.beginPath(); g.moveTo(690, BASE); g.lineTo(lerp(690, 940, ax), BASE); g.stroke();
   if (ax > 0.5) { g.beginPath(); g.moveTo(1000, BASE); g.lineTo(lerp(1000, 1740, ax), BASE); g.stroke();
@@ -34,7 +34,7 @@ function pageA(g, lt) {
     L.card(g, b.x - BW / 2, BASE - h, BW, h, { fill: last ? C.red : C.blue, r: 14, lw: 4, sh: 6 });
     L.txt(g, b.y, b.x, BASE + 52, 38, { align: 'center', col: last ? C.red : C.ink });
     if (last) L.at(g, b.x, BASE - h - 22, 1 + punch, hh => L.txt(hh, String(Math.round(165 * vp5)), 0, 0, 74, { align: 'center', w: 'Black', col: C.red }));
-    else L.at(g, b.x, BASE - h - 22, L.popK(lt, t0 + 0.3, 0.3, 2.4), hh => L.txt(hh, String(b.v), 0, 0, 46, { align: 'center', w: 'Black' }));   // 柱子长完才亮出数，不出现中途倒挂
+    else L.at(g, b.x, BASE - h - 22, L.popK(lt, t0 + 0.3, 0.3, 2.4), hh => L.txt(hh, String(b.v), 0, 0, 46, { align: 'center', w: 'Black' }));   // The number only shows after the bar finishes growing, so it never lags behind midway
     g.restore();
   });
   const h5 = 165 * KH * vp5;
@@ -42,9 +42,9 @@ function pageA(g, lt) {
   L.ring(g, lt, BARS[4].x, BASE - h5 - 48, 124, 66, clamp((lt - land - 0.05) / 0.35), { seed: 17, col: C.red, lw: 7 });
   if (hit > 0) L.twinkles(g, lt, [[BARS[4].x - 150, BASE - h5 - 90], [BARS[4].x + 150, BASE - h5 - 70]], { r: 18 });
   g.restore();
-  // 大数字砸入：165 次独占一屏（停 1.3 秒左右），翻页前收回
-  // 卡片从 2025 那根红柱顶上长出来、讲完再缩回红柱
-  // 进场：从 2025 红柱顶上长出来；退场：原地淡出（不再缩回去压住柱顶的数）
+  // Big number slamming in: 165 gets its own screen (holding about 1.3 seconds), retracted before the page turn
+  // The card grows from the top of the red 2025 bar and shrinks back into the red bar when done
+  // Entrance: grows from the top of the red 2025 bar; exit: fades out in place (no longer shrinking back over the number on top of the bar)
   const entering = lt < land + 0.6, ks = push > 0.01 ? (entering ? 0.15 + 0.85 * push : 1) * (1 + MO.settle(lt - land - 0.3, 0.06, 3, 6)) : 0, kx = entering ? lerp(1630, 1000, push) : 1000, ky = entering ? lerp(300, 520, push) : 520;
   if (ks > 0) { g.save(); g.globalAlpha *= entering ? 1 : push; L.at(g, kx, ky, ks, h => {
     L.card(h, -380, -230, 760, 430, { fill: C.white, r: 40, lw: 6, sh: 12 });
@@ -55,7 +55,7 @@ function pageA(g, lt) {
   if (push > 0.9) L.burstLines(g, 1000, 520, 460, 580, clamp((lt - land) / 0.55), { n: 14, col: C.red, lw: 8 });
   const kk = L.popK(lt, Qv.y25 + 0.1, 0.4, 2.4);
   if (kk > 0) L.at(g, 1060, 210, kk, h => L.kw(h, '2025年 · 全是猎鹰9号', 0, 0, { size: 46, fill: C.yel, col: C.ink }), -0.03);   // 和图题「猎鹰火箭」对上口径
-  // 因果链：回收 → 发射越来越密（念「回收之后，发射越来越密」）
+  // Cause and effect: recovery → launches getting denser (on "after recovery, launches grew denser and denser")
   const out = 1 - hiK;
   if (out > 0) { g.save(); g.globalAlpha *= out;
     const k1 = L.popK(lt, Qv.hs, 0.4, 2.2), k2 = L.popK(lt, Qv.fs, 0.4, 2.2);
@@ -64,11 +64,11 @@ function pageA(g, lt) {
     if (k2 > 0) L.at(g, 1290, 220, k2, h => L.kw(h, '发射越来越密', 0, 0, { size: 42, fill: C.blue }));
     g.restore(); }
 }
-// ② 日历＋天平
-const DAYS = [0, 2, 5, 7, 9, 12];   // 两周 6 发≈2.3 天一发（「两天多一发」）
+// ② Calendar + balance scale
+const DAYS = [0, 2, 5, 7, 9, 12];   // 6 launches in two weeks ≈ one every 2.3 days ("more than one every two days")
 function calendar(g, lt) {
   const Qv = q(), k = L.popK(lt, Qv.pj + 0.6, 0.45, 1.8); if (k <= 0) return;
-  L.at(g, 840, 560, k * 0.94, h => {   // 日历放低一点：讲解员要坐在它上沿
+  L.at(g, 840, 560, k * 0.94, h => {   // Calendar placed a bit lower: the presenter sits on its top edge
     L.card(h, -280, -190, 560, 380, { fill: C.white }); h.save(); h.clip(L.rrp(-280, -190, 560, 380, 26)); h.fillStyle = C.red; h.fillRect(-280, -190, 560, 70); h.restore();
     h.lineWidth = 4; h.strokeStyle = C.ink; h.stroke(L.rrp(-280, -190, 560, 380, 26)); h.beginPath(); h.moveTo(-280, -120); h.lineTo(280, -120); h.stroke();
     L.txt(h, '两周', 0, -152, 38, { col: C.white, align: 'center', base: 'middle' });
@@ -98,18 +98,18 @@ function scale(g, lt) {
   const kh = L.popK(lt, Qv.hd - 0.05, 0.38, 2.8);
   if (kh > 0) L.at(g, 1430, 300, kh, h => L.kw(h, '还多！', 0, 0, { size: 56, fill: C.red }), -0.05);
 }
-// ③ 37 次
+// ③ 37 times
 function pageC(g, lt) {
   const Qv = q(), kb = L.popK(lt, Qv.yym - 0.2, 0.45, 1.8);
   if (kb > 0) L.at(g, 1440, 850, kb, h => { L.rocket(h, RK.falcon9({ stage: 'booster', legs: 1, fins: 1 }), 0, 0, 10.5, { sx: 1.75, lw: 5 });
-    // 身上贴满飞行贴纸
+    // Covered in flight stickers
     const n = Math.round(37 * MO.expoOut(clamp((lt - Qv.yj + 0.4) / (Qv.n37E - Qv.yj + 0.4))));
     for (let i = 0; i < Math.min(n, 12); i++) { const yy = -90 - i * 26, xx = (i % 2 ? 1 : -1) * 4; h.fillStyle = [C.yel, C.teal, C.pink, C.blue][i % 4]; h.beginPath(); h.arc(xx, yy, 8, 0, TAU); h.fill(); h.lineWidth = 2; h.strokeStyle = C.ink; h.stroke(); } }, 0.015 * Math.sin(lt * 1.8));
   if (kb > 0) L.at(g, 1440, 350, kb, h => L.kw(h, '有一枚助推器', 0, 0, { size: 40, fill: C.white, col: C.ink }));
   if (kb > 0) L.at(g, 840, 872, L.popK(lt, Qv.n37 + 0.1, 0.4, 2.2), h => L.kw(h, '截至2026年8月', 0, 0, { size: 36, fill: C.yel, col: C.ink }), 0.03);
   const c0 = Qv.yj - 0.4, c1 = Qv.n37E, cp = clamp((lt - c0) / (c1 - c0)), n = Math.floor(37 * MO.cubicOut(cp) + 1e-6);
   if (lt < c0 - 0.3) return;
-  for (let i = 0; i < 37; i++) { const x = 548 + (i % 10) * 64, y = 270 + Math.floor(i / 10) * 108, on = i < n;   // 这一屏讲解员在右边，点数图挪到左边
+  for (let i = 0; i < 37; i++) { const x = 548 + (i % 10) * 64, y = 270 + Math.floor(i / 10) * 108, on = i < n;   // On this screen the presenter is on the right and the pictogram moves to the left
     g.save(); g.globalAlpha = on ? 1 : 0.22; const pk = on ? MO.settle(lt - (c0 + (c1 - c0) * MO.invert(MO.cubicOut, (i + 1) / 37)), 0.25, 3, 8) : 0;
     L.rocket(g, L.F1(), x, y + 34, 3.4 * (1 + pk), { fins: true, sx: 3.6, pal: on ? {} : { nose: C.mute } }); g.restore(); }
   const kn = L.popK(lt, c0, 0.35, 2);
@@ -127,14 +127,14 @@ SCENES[ID] = {
     if (s1 < 1) { c.save(); c.globalAlpha = Math.max(0, 1 - 2 * s1); c.translate(0, off); pageA(c, lt); c.restore(); }
     if (s1 > 0 && s2 < 1) { c.save(); if (s1 < 1) { c.beginPath(); c.rect(0, 0, 1920, 905); c.clip(); } c.globalAlpha = Math.max(0, 1 - 2 * s2); c.translate(0, off + 1080); calendar(c, lt); scale(c, lt); c.restore(); }
     if (s2 > 0) { c.save(); if (s2 < 1) { c.beginPath(); c.rect(0, 0, 1920, 905); c.clip(); } c.translate(0, off + 2160); pageC(c, lt); c.restore(); }
-    // 页眉不跟着卷（卷动的内容只在讲解员右边走）
+    // The header doesn't scroll along (scrolling content only moves to the right of the presenter)
     if (s1 < 0.5) L.pageTitle(c, lt, '猎鹰火箭每年发射次数', Qv.hs - 0.1, { col: C.blue, size: 40 });
     else if (s2 < 0.5) L.pageTitle(c, lt, '发射有多密', Qv.pj + 0.75, { col: C.teal, size: 42 }); else L.pageTitle(c, lt, '最能飞的一枚', Qv.yym - 0.25, { col: C.red, size: 42 });
   },
 };
-ERAS.find(e => e.id === ID).transition = { type: 'lin_zoom', dur: 0.6, x: 1560, y: 560 };   // 推镜穿过「送进轨道」那张卡
+ERAS.find(e => e.id === ID).transition = { type: 'lin_zoom', dur: 0.6, x: 1560, y: 560 };   // Pushing through the "sent into orbit" card
 L.cast(ID, [
-  { t: 0.05, pose: 'stick', fr: 'talk', x: 330, walk: 0.85 },   // 退回左边，给图表让出位置
+  { t: 0.05, pose: 'stick', fr: 'talk', x: 330, walk: 0.85 },   // Moving back to the left to make room for the chart
   { t: TM.cue(ID, '2025年') - 0.1, pose: 'stick', fr: 'talk', x: 165, s: 0.4, glide: 0.45 },   // 图表和 165 满屏，讲解员退到角落
   { t: TM.cue(ID, '165次') + 0.1, pose: 'wow', fr: 'bounce' },
   { t: TM.cue(ID, '平均两天多一发') + 0.6, pose: 'count', fr: 1, x: 330, s: 0.66, glide: 0.45 },

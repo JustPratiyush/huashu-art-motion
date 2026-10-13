@@ -1,19 +1,19 @@
-# Clawd 博物馆奇妙夜 · GIF片段
+# Clawd: Night at the Museum · GIF clips
 
-从98秒成片《Clawd 博物馆奇妙夜》v2直接截取。完整成片（MP4，带配乐）在 Releases。这里不包含该片的工程。
+Cut directly from v2 of the 98-second film *Clawd: Night at the Museum*. The full film (MP4, with music) is in Releases. This folder doesn't include that film's project.
 
-- `clawd-vangogh.gif`：00:28.40–00:33.40，5秒，720×405，15fps。跳进梵高《麦田与柏树》→厚涂Clawd在麦浪里跑。
-- `clawd-trex.gif`：01:20.50–01:24.50，4秒，640×360。霸王龙骨架像猫追激光点一样追手电光斑。
-- `clawd-dawn.gif`：01:34.00–01:38.00，4秒，640×360。天亮，保安放下咖啡，画框里的Clawd眨一下眼。
+- `clawd-vangogh.gif`: 00:28.40–00:33.40, 5 seconds, 720×405, 15fps. Jumps into Van Gogh's *Wheat Field with Cypresses* → an impasto Clawd runs through the waves of wheat.
+- `clawd-trex.gif`: 01:20.50–01:24.50, 4 seconds, 640×360. A T. rex skeleton chases the flashlight spot like a cat chasing a laser pointer.
+- `clawd-dawn.gif`: 01:34.00–01:38.00, 4 seconds, 640×360. Dawn: the guard puts down a coffee, and Clawd in the picture frame blinks once.
 
-导出参数和超级玛丽那组一样：原速，20fps，无声，无限循环，每段独立192色调色板，Bayer抖动，再用`gifsicle -O3`优化。梵高那段厚涂笔触太密，按这组参数是12.5MB，改成15fps、160色、`gifsicle --lossy=40`，压到7.7MB。
+Export settings are the same as the Super Mario set: original speed, 20fps, silent, infinite loop, an independent 192-color palette per clip, Bayer dithering, then optimized with `gifsicle -O3`. The Van Gogh clip's impasto strokes are so dense that these settings gave 12.5MB, so it was changed to 15fps, 160 colors and `gifsicle --lossy=40`, bringing it down to 7.7MB.
 
-## 片里用了什么
+## What the film uses
 
-- 画风：暗褐纸上的炭笔夜景，只有手电光照到的地方显出颜色；入画时换成那位画家自己的笔法。
-- 入画的五幅：梵高《麦田与柏树》（Met 436535）、修拉《马戏团游行》（437654）、维米尔《拿水壶的少女》（437881）、伦勃朗《亚里士多德与荷马胸像》（437394）、勒茨《华盛顿横渡特拉华河》（11417）。全部来自大都会艺术博物馆开放获取，`isPublicDomain: true`（CC0）。
-- 恐龙和象群是按真实骨骼与形体画的炭笔线稿；保安只出手和影子，代码不画人脸。
+- Style: a charcoal night scene on dark brown paper, with color showing only where the flashlight shines; on entering a painting, it switches to that painter's own brushwork.
+- The five paintings entered: Van Gogh's *Wheat Field with Cypresses* (Met 436535), Seurat's *Circus Sideshow* (437654), Vermeer's *Young Woman with a Water Pitcher* (437881), Rembrandt's *Aristotle with a Bust of Homer* (437394), Leutze's *Washington Crossing the Delaware* (11417). All from The Metropolitan Museum of Art's Open Access collection, `isPublicDomain: true` (CC0).
+- The dinosaurs and elephants are charcoal line drawings based on real skeletons and forms; the guard appears only as hands and a shadow, and code draws no human faces.
 
-## 版权
+## Copyright
 
-Clawd 是 Anthropic 的 Claude Code 吉祥物，形象权利归 Anthropic。本片是非官方的同人示范，与 Anthropic 无关；GIF 与成片只用于展示这个 skill 能做什么，不随仓库的 MIT 授权。
+Clawd is Anthropic's Claude Code mascot, and the rights to its likeness belong to Anthropic. This film is an unofficial fan demo, not affiliated with Anthropic; the GIFs and the full film are only for showing what this skill can do and are not covered by the repository's MIT license.

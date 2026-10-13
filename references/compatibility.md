@@ -1,34 +1,34 @@
-# 兼容性与验证范围
+# Compatibility and validation scope
 
-验证日期：2026-10-08。以下区分安装/配置、宿主在线执行、实际媒体生成，不以一个层面的通过代替另一个。
+Validation date: 2026-10-08. The following distinguishes installation/configuration, live host execution, and actual media generation, without letting a pass at one level stand in for another.
 
-## 安装与配置升级
+## Installation and configuration upgrades
 
-在隔离Git工作区，用官方skills CLI实际执行`skills add <本地发布包> --skill huashu-art-motion --agent <宿主> --yes --copy`，每个目标连续安装两次。claude-code、codex、kimi-code-cli三个目标均成功，安装目录外media.json逐字节不变。这里验证的是覆盖式重装后的偏好保留，不冒称完整模拟了所有历史版本或所有安装器的update实现。
+In an isolated Git workspace, the official skills CLI actually ran `skills add <local release package> --skill huashu-art-motion --agent <host> --yes --copy`, installing each target twice in a row. All three targets — claude-code, codex and kimi-code-cli — succeeded, and the media.json outside the install directory stayed byte-for-byte unchanged. What's validated here is preference retention after an overwriting reinstall; it doesn't claim to fully simulate every historical version or every installer's update implementation.
 
-旧语音配置不需改写即可合并新默认字段；新增图片能力仍未选择、未授权。Codex安装副本的CLI读取了原system偏好和revision，未恢复为公共默认。
+Old voice configuration merges with new default fields without being rewritten; the new image capability remains unchosen and unauthorized. The CLI in Codex's installed copy read the original system preference and revision, without reverting to the public default.
 
-## 宿主在线运行
+## Live host runs
 
-- Codex CLI 0.160.1：真实会话加载安装后的skill和指南，运行未配置状态、禁用生成、无工具、已有图片导入、私人system偏好保存；输出图片与源逐字节一致，配置来源符合预期。
-- Claude Code 2.1.287：安装和本地CLI可用；在线会话因当前测试环境周配额返回429，未完成模型执行回归。不能据此标为在线通过，也不能据此判断Skill不兼容。
-- Kimi Code CLI 0.38.0：安装和本地CLI可用；在线会话因当前测试账户访问权限返回403，未完成模型执行回归。该版本非交互`--prompt`不能同时带`--auto`或`--yolo`，重试命令已修正后仍为账户403。
+- Codex CLI 0.160.1: a real session loaded the installed skill and guides, and ran the unconfigured state, generation disabled, no tools, importing an existing image, and saving a private system preference; the output image was byte-for-byte identical to the source, and configuration sources were as expected.
+- Claude Code 2.1.287: installation and the local CLI work; the live session returned 429 due to the test environment's weekly quota, so the model execution regression wasn't completed. It can't be marked as passing live on this basis, nor can it be judged incompatible.
+- Kimi Code CLI 0.38.0: installation and the local CLI work; the live session returned 403 due to the test account's access permissions, so the model execution regression wasn't completed. In this version non-interactive `--prompt` can't be combined with `--auto` or `--yolo`; after correcting the retry command it was still an account 403.
 
-这些会话使用隔离的工作区与媒体配置，复用本机既有登录；并非三个全新账号。Claude/Kimi账户条件恢复后仍需补跑在线用例。工具能力取决于实际会话，不能从宿主名称推断一定有生图。
+These sessions used isolated workspaces and media configuration, reusing the machine's existing logins; they weren't three brand-new accounts. Once Claude/Kimi account conditions recover, the live cases still need to be rerun. Tool capabilities depend on the actual session; you can't infer from a host's name that it definitely has image generation.
 
-## 实际媒体与自动测试
+## Actual media and automated tests
 
-macOS系统声音和火山复刻已完成真实短句生成；当前Codex会话实际调用内置生图，得到带透明像素的1536×1024 PNG，并通过plan→工具调用→回执→项目复制与SHA验收。图片工具调用由Agent完成，CLI未代替调用。此测试只证明接入路径和文件属性，不代替美术质量判断。
+macOS system voices and Volcengine cloning have completed real short-sentence generation; the current Codex session actually called its built-in image generation, producing a 1536×1024 PNG with transparent pixels, and passed plan → tool call → receipt → project copy and SHA acceptance. The image tool call was made by the agent; the CLI didn't make it on its behalf. This test only proves the integration path and file properties; it doesn't replace judgment of artistic quality.
 
-自动测试覆盖配置合并、权限收紧、并发写入、旧PCM输出、未完成语音流、图片特性/计费选择、跨会话计划、配置撤销、图片并发替换和发布对象检查。CI在Linux上运行；真实系统声音仅验证macOS，Windows/Linux的系统声音后端尚未实现。
+Automated tests cover configuration merging, permission tightening, concurrent writes, old PCM output, incomplete voice streams, image feature/cost selection, cross-session plans, configuration revocation, concurrent image replacement and release object checks. CI runs on Linux; real system voices are validated only on macOS, and system voice backends for Windows/Linux are not yet implemented.
 
-## 可复现的最低检查
+## Minimal reproducible checks
 
 ```sh
-python scripts/capabilities.py status --config <一个空JSON文件> --explain
-python scripts/capabilities.py image-status --config <禁止生图的JSON> --mode generate
-python scripts/capabilities.py use-image --file <现有PNG> --out <项目>/配图/新文件.png
+python scripts/capabilities.py status --config <an empty JSON file> --explain
+python scripts/capabilities.py image-status --config <JSON forbidding image generation> --mode generate
+python scripts/capabilities.py use-image --file <an existing PNG> --out <project>/images/new_file.png
 python -m unittest discover -s tests -v
 ```
 
-实际图片工具验证按images.md从当前工具schema形成快照；没有工具时明确返回unavailable，不能用虚构工具冒充成功。没有凭证或授权的CI不会调用付费媒体服务。
+Actual image tool validation follows images.md, forming a snapshot from the current tool schema; with no tools it explicitly returns unavailable, and a fictional tool can't be used to fake success. CI without credentials or authorization never calls paid media services.

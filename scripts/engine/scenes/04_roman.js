@@ -1,12 +1,12 @@
-// 公元79年 庞贝马赛克（opus tessellatum / vermiculatum）——纯代码。
-// 管线：①平涂底稿（静态部分缓存，少女/猫/火山烟/边框卷涡每帧重画）
-//      →②自写镶嵌渲染器：init 时一次性算好「石块布局」——距离场等值线上走线放石块（沿轮廓排，andamento）、
-//        远处规则成行；每块石头是带四边独立抖动的旋转方块，用「加权 L∞ Voronoi」光栅成 ID 图，相邻石块之间自然留灰浆缝；
-//        每像素预存斜面明暗（左上受光）＋石纹颗粒
-//      →③每帧只在动态矩形（少女、猫、火山画、边框带）里按石块中心去底稿取色重填——石块不动，颜色在石块间流动。
+// 79 AD Pompeian mosaic (opus tessellatum / vermiculatum) — pure code.
+// Pipeline: ① flat-color underpainting (static parts cached; girl / cat / volcano smoke / border scrolls redrawn every frame)
+//      → ② a home-made mosaic renderer: at init, the "tessera layout" is computed once — tesserae are placed walking along the contour lines of a distance field (laid along outlines, andamento),
+//        and in regular rows further away; each tessera is a rotated square with each of its four sides jittered independently, rasterized into an ID map with a "weighted L∞ Voronoi", leaving natural grout gaps between neighbors;
+//        per-pixel bevel shading (lit from the top left) + stone grain is precomputed
+//      → ③ each frame, only inside dynamic rectangles (girl, cat, volcano picture, border bands), colors are sampled from the underpainting at tessera centers and refilled — the tesserae stay still while the colors flow between them.
 SCENES['04_roman'] = (() => {
   const W = 1920, H = 1080, { clamp, lerp, rng } = U, P = PAINT;
-  const BW = 84;                                       // 外框波浪纹带宽
+  const BW = 84;                                       // width of the wave band on the outer frame
   const C = {
     wall: '#e4ddcd', halo: '#f5f1e8', outline: '#46322a',
     floor: '#dac9a0', floorLine: '#8f6c40',
@@ -20,13 +20,13 @@ SCENES['04_roman'] = (() => {
     stola: '#efe7d5', stolaF: '#cbbd9c', skin: '#efc4a0', hair: '#dcaa42', hairD: '#9c6c1c', lip: '#b8433a', eye: '#2a2420',
     catO: '#dc8530', catO2: '#c06a24', catS: '#9c4818', catW: '#f7f2e8', catEye: '#e9c22c', collar: '#b02a22',
   };
-  // 石块类别：尺寸 / 沿轮廓排几圈（99=全部沿轮廓）/ 颜色抖动幅度
+  // Tessera classes: size / how many rings laid along outlines (99 = all along outlines) / color jitter amount
   const K_WALL = 0, K_HALO = 1, K_FIG = 2, K_FACE = 3, K_HAIR = 4, K_PIC = 5, K_FRAME = 6, K_BORDER = 7, K_TEXT = 8, K_FLOOR = 9, K_OBJ = 10, K_CAT = 11;
   const SZ = [12, 11, 10, 5, 8, 9, 9, 7.6, 7, 13, 10, 9];
   const KR = [1, 9, 99, 99, 99, 2, 99, 0, 99, 1, 99, 99];
   const JIT = [.08, .05, .05, .04, .05, .06, .05, .05, .05, .065, .05, .05];
 
-  // ---------- 静态物件的路径 ----------
+  // ---------- paths of static objects ----------
   const rectP = (x, y, w, h) => { const p = new Path2D(); p.rect(x, y, w, h); return p; };
   const FRAME = rectP(360, 120, 440, 440);
   const TABLE_TOP = (() => { const p = new Path2D(); p.roundRect(820, 634, 380, 30, 15); return p; })();
@@ -35,29 +35,29 @@ SCENES['04_roman'] = (() => {
   const AMPH = RIG.smooth([[1712, 616], [1744, 616], [1746, 652], [1772, 690], [1768, 760], [1752, 830], [1734, 884], [1729, 900], [1724, 884], [1704, 830], [1688, 760], [1686, 690], [1710, 652]]);
   const AMPH_LIP = rectP(1702, 604, 52, 13);
   const AMPH_H = (() => { const p = new Path2D(); p.moveTo(1714, 628); p.bezierCurveTo(1684, 628, 1682, 660, 1692, 690); p.moveTo(1742, 628); p.bezierCurveTo(1772, 628, 1774, 660, 1764, 690); return p; })();
-  // 少女的罗马服饰：披肩 palla（背后斜披＋盖过膝＋前襟垂下）
+  // The girl's Roman dress: palla shawl (draped diagonally across the back + covering past the knees + front panel hanging down)
   const PALLA_BACK = RIG.smooth([[1350, 436], [1384, 440], [1408, 472], [1422, 532], [1432, 600], [1448, 662], [1454, 722], [1440, 766], [1392, 772], [1398, 700], [1394, 620], [1380, 540], [1362, 482]]);
   const PALLA_LAP = RIG.smooth([[1418, 612], [1448, 652], [1454, 722], [1440, 766], [1362, 778], [1290, 768], [1226, 744], [1200, 722], [1236, 712], [1300, 716], [1360, 700], [1392, 660]]);
   const PALLA_HANG = RIG.smooth([[1322, 768], [1366, 774], [1360, 850], [1356, 912], [1324, 914], [1330, 840]]);
   const PALLA_FOLDS = [[[1372, 470], [1398, 560], [1412, 660], [1418, 740]], [[1236, 730], [1300, 742], [1370, 744], [1424, 734]]].map(q => RIG.smooth(q, false));
 
-  // ---------- 平涂底稿：静态部分 ----------
+  // ---------- flat-color underpainting: static parts ----------
   function picture(g) {
     g.save(); g.beginPath(); g.rect(392, 152, 376, 376); g.clip();
     const sg = g.createLinearGradient(0, 152, 0, 470); sg.addColorStop(0, C.sky); sg.addColorStop(1, C.sky2); g.fillStyle = sg; g.fillRect(392, 152, 376, 376);
     g.strokeStyle = '#e4eeee'; g.lineWidth = 5; [[410, 250, 500], [620, 262, 760], [400, 300, 470], [640, 318, 750]].forEach(([a, y, b]) => { g.beginPath(); g.moveTo(a, y); g.lineTo(b, y); g.stroke(); });
-    // 火山：三面
+    // Volcano: three faces
     const poly = (pts, col) => { g.fillStyle = col; g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(...q) : g.moveTo(...q)); g.closePath(); g.fill(); };
     poly([[402, 472], [535, 222], [560, 222], [520, 472]], C.coneL);
     poly([[520, 472], [560, 222], [586, 222], [646, 472]], C.cone);
     poly([[646, 472], [586, 222], [738, 472]], C.coneD);
     g.strokeStyle = C.ridge; g.lineWidth = 5; [[[548, 226], [500, 330], [470, 420]], [[574, 226], [600, 330], [620, 440]]].forEach(l => { g.beginPath(); l.forEach((q, i) => i ? g.lineTo(...q) : g.moveTo(...q)); g.stroke(); });
     g.fillStyle = '#2a2c48'; g.beginPath(); g.ellipse(560, 222, 27, 6, 0, 0, Math.PI * 2); g.fill();
-    // 熔岩
+    // Lava
     g.lineCap = 'round'; g.lineJoin = 'round';
     g.strokeStyle = C.lava; g.lineWidth = 8; g.beginPath(); g.moveTo(566, 226); g.lineTo(580, 262); g.lineTo(596, 298); g.lineTo(614, 334); g.stroke();
     g.strokeStyle = C.lava2; g.lineWidth = 5; g.beginPath(); g.moveTo(552, 228); g.lineTo(544, 262); g.lineTo(538, 290); g.stroke();
-    // 山坡、地面、柏树
+    // Slopes, ground, cypresses
     g.fillStyle = C.green; g.beginPath(); g.moveTo(392, 462); g.quadraticCurveTo(470, 430, 560, 456); g.quadraticCurveTo(650, 482, 768, 448); g.lineTo(768, 528); g.lineTo(392, 528); g.fill();
     g.fillStyle = C.green2; g.beginPath(); g.moveTo(392, 482); g.quadraticCurveTo(480, 462, 580, 484); g.quadraticCurveTo(680, 502, 768, 476); g.lineTo(768, 528); g.lineTo(392, 528); g.fill();
     g.fillStyle = C.ground; g.beginPath(); g.moveTo(392, 502); g.quadraticCurveTo(560, 488, 768, 504); g.lineTo(768, 528); g.lineTo(392, 528); g.fill();
@@ -71,33 +71,33 @@ SCENES['04_roman'] = (() => {
   function staticScene(g) {
     g.fillStyle = C.wall; g.fillRect(0, 0, W, H);
     g.fillStyle = C.floor; g.fillRect(BW, 905, W - 2 * BW, H - BW - 905);
-    // 物件晕圈（白石沿轮廓）
+    // Object halos (white tesserae along outlines)
     g.lineJoin = 'round'; g.strokeStyle = C.halo;
     g.lineWidth = 44; g.stroke(FRAME); g.stroke(TABLE_TOP); g.stroke(TABLE_PED); g.stroke(AMPH); g.stroke(AMPH_LIP); g.stroke(AMPH_H);
     g.lineWidth = 34; g.stroke(CHAIR);
     g.strokeStyle = C.floorLine; g.lineWidth = 6; g.beginPath(); g.moveTo(BW, 905); g.lineTo(W - BW, 905); g.stroke();
-    // 画框：红框 → 深线 → 金线 → 深线 → 画
+    // Picture frame: red frame → dark line → gold line → dark line → picture
     g.fillStyle = C.red; g.fillRect(360, 120, 440, 440);
     g.fillStyle = C.red2; g.fillRect(376, 136, 408, 408);
     g.fillStyle = C.gold; g.fillRect(381, 141, 398, 398);
     g.fillStyle = '#3a2a22'; g.fillRect(387, 147, 386, 386);
     picture(g);
     g.strokeStyle = C.outline; g.lineWidth = 5; g.stroke(FRAME);
-    // 椅子（在少女后面）
+    // Chair (behind the girl)
     g.fillStyle = C.chair; g.fill(CHAIR); g.strokeStyle = '#7d5c1c'; g.lineWidth = 5; g.stroke(CHAIR);
-    // 桌子：蓝灰圆桌面＋喇叭形单柱
+    // Table: blue-gray round tabletop + flared single pedestal
     g.fillStyle = C.table; g.fill(TABLE_PED);
     g.save(); g.clip(TABLE_PED); g.fillStyle = '#93a8bb'; g.fillRect(940, 660, 52, 240); g.fillStyle = C.tableD; g.fillRect(1030, 660, 60, 240);
     g.fillStyle = '#c33a2c'; g.fillRect(940, 736, 140, 9); g.fillStyle = '#3d5a9a'; g.fillRect(940, 748, 140, 7); g.restore();
     g.strokeStyle = C.outline; g.lineWidth = 6; g.stroke(TABLE_PED);
     g.fillStyle = C.table; g.fill(TABLE_TOP); g.fillStyle = C.tableHi; g.fillRect(834, 638, 352, 9); g.stroke(TABLE_TOP);
-    // 陶罐
+    // Pottery jar
     g.strokeStyle = C.amphD; g.lineWidth = 9; g.lineCap = 'round'; g.stroke(AMPH_H);
     g.fillStyle = C.amph; g.fill(AMPH); g.fill(AMPH_LIP);
     g.save(); g.clip(AMPH); g.fillStyle = C.amphHi; g.fillRect(1698, 640, 14, 200); g.fillStyle = C.amphD; g.fillRect(1748, 640, 30, 260); g.restore();
     g.strokeStyle = C.outline; g.lineWidth = 6; g.stroke(AMPH); g.stroke(AMPH_LIP);
-    // CAVE CATTVM：碑刻大写，黑石
-    // 字母自己写笔画（等宽粗笔画最像石块拼字；字体的细横笔在 7px 石块下会断）：60px 高，笔画 12px
+    // CAVE CATTVM: inscriptional capitals in black stone
+    // The letters are drawn with their own strokes (uniform thick strokes look most like letters pieced from tesserae; a font's thin horizontals break up at 7px tesserae): 60px tall, 12px strokes
     const GL = { C: [44, g2 => g2.ellipse(22, 30, 19, 26, 0, Math.PI * 0.27, Math.PI * 1.73)], A: [46, [[[0, 60], [23, 0], [46, 60]], [[11, 38], [35, 38]]]], V: [46, [[[0, 0], [23, 60], [46, 0]]]],
       E: [38, [[[38, 6], [6, 6], [6, 54], [38, 54]], [[6, 30], [32, 30]]]], T: [46, [[[0, 6], [46, 6]], [[23, 6], [23, 60]]]], M: [52, [[[4, 60], [6, 0], [26, 46], [46, 0], [48, 60]]]] };
     g.save(); g.strokeStyle = '#1d1a18'; g.lineWidth = 14; g.lineJoin = 'miter'; g.lineCap = 'butt';
@@ -106,19 +106,19 @@ SCENES['04_roman'] = (() => {
     const sc = 600 / (tx - gap); g.translate(270, 922); g.scale(sc, 1);
     for (const [ch, x0] of lay) { const gl = GL[ch][1]; g.beginPath(); if (typeof gl === 'function') { g.save(); g.translate(x0, 0); gl(g); g.restore(); } else gl.forEach(l => l.forEach((q, k) => k ? g.lineTo(x0 + q[0], q[1]) : g.moveTo(x0 + q[0], q[1]))); g.stroke(); }
     g.restore();
-    // 鱼与老鼠（小石块）
+    // Fish and mouse (small tesserae)
     g.fillStyle = '#5f5b57'; g.beginPath(); g.ellipse(1446, 950, 40, 8, 0, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.moveTo(1408, 950); g.lineTo(1386, 938); g.lineTo(1386, 962); g.closePath(); g.fill();
     g.strokeStyle = '#d8ccb0'; g.lineWidth = 2.5; for (let k = 0; k < 5; k++) { g.beginPath(); g.moveTo(1420 + k * 11, 944); g.lineTo(1426 + k * 11, 956); g.stroke(); }
     g.fillStyle = '#86807a'; g.beginPath(); g.ellipse(1784, 960, 22, 10, 0, 0, Math.PI * 2); g.fill();
     g.beginPath(); g.moveTo(1800, 952); g.lineTo(1824, 962); g.lineTo(1800, 968); g.fill(); g.beginPath(); g.arc(1798, 950, 5, 0, Math.PI * 2); g.fill();
     g.strokeStyle = '#86807a'; g.lineWidth = 3; g.beginPath(); g.moveTo(1764, 962); g.quadraticCurveTo(1748, 950, 1738, 966); g.stroke();
-    // 内框黑线
+    // Inner black frame line
     g.fillStyle = C.bK; g.fillRect(BW - 2, BW - 2, W - 2 * BW + 4, 6); g.fillRect(BW - 2, H - BW - 4, W - 2 * BW + 4, 6); g.fillRect(BW - 2, BW - 2, 6, H - 2 * BW + 4); g.fillRect(W - BW - 4, BW - 2, 6, H - 2 * BW + 4);
   }
 
-  // ---------- 平涂底稿：会动的部分 ----------
-  // 四边波浪纹（维特鲁威卷涡），每条边在自己的局部坐标里画同一个图案：u 沿顺时针方向，v 从外往里
+  // ---------- flat-color underpainting: moving parts ----------
+  // Wave pattern on all four sides (Vitruvian scroll); each side draws the same pattern in its own local coordinates: u runs clockwise, v from outside in
   const PER = 81;
   const SIDES = [[1, 0, 0, 1, 0, 0, W], [0, 1, -1, 0, W, 0, H], [-1, 0, 0, -1, W, H, W], [0, -1, 1, 0, 0, H, H]];
   function border(g, phase) {
@@ -137,23 +137,23 @@ SCENES['04_roman'] = (() => {
       }
       g.restore();
     }
-    // 四角方块饰
+    // Square ornaments at the four corners
     for (const [x, y] of [[0, 0], [W - BW, 0], [0, H - BW], [W - BW, H - BW]]) {
       g.fillStyle = C.bK; g.fillRect(x, y, BW, BW); g.fillStyle = C.bW; g.fillRect(x + 10, y + 10, BW - 20, BW - 20);
       g.fillStyle = C.bK; g.fillRect(x + 22, y + 22, BW - 44, BW - 44); g.fillStyle = C.red; g.fillRect(x + 33, y + 33, BW - 66, BW - 66);
     }
   }
-  // 火山烟团＋火星（全局时间驱动，连续）
+  // Volcano smoke puffs + sparks (driven by global time, continuous)
   function volcanoFX(g, t) {
     g.save(); g.beginPath(); g.rect(392, 152, 376, 376); g.clip();
-    // 云带（火山灰云）向右漂：周期 380px，一秒 55px
+    // Cloud band (volcanic ash cloud) drifting right: period 380px, 55px per second
     const cx0 = (t * 55) % 380;
     for (const ox of [-380, 0]) [[28, 168, 46, 18, C.cloud], [108, 162, 52, 16, C.cloud2], [218, 166, 50, 18, C.cloud], [308, 170, 58, 17, C.cloud2], [63, 192, 36, 10, C.cloud2], [278, 195, 40, 10, C.cloud]]
       .forEach(([x, y, rx, ry, col]) => { g.fillStyle = col; g.beginPath(); g.ellipse(392 + x + ox + cx0, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); });
     const N = 9;
     for (let i = 0; i < N; i++) {
       const q = ((t * 0.85 + i / N) % 1), e = 1 - Math.pow(1 - q, 1.6);
-      const x = 560 + e * 175 + Math.sin(t * 2 + i * 2.1) * 10, y = 212 - e * 62 - Math.sin(e * 3.1) * 18, r = 13 + q * 40;   // 烟柱往右压低飘（留在画框天空里才看得见）
+      const x = 560 + e * 175 + Math.sin(t * 2 + i * 2.1) * 10, y = 212 - e * 62 - Math.sin(e * 3.1) * 18, r = 13 + q * 40;   // the smoke column drifts low to the right (only visible while it stays in the frame's sky)
       const col = P.mix(P.hex('#3f3c3a'), P.hex('#a29c94'), Math.min(1, q * 1.1));
       g.globalAlpha = q > 0.8 ? (1 - q) / 0.2 : 1;
       g.fillStyle = P.rgb(col); g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
@@ -167,14 +167,14 @@ SCENES['04_roman'] = (() => {
       const x = 560 + Math.cos(ang) * sp * tt, y = 216 + Math.sin(ang) * sp * tt + 260 * tt * tt;
       g.fillStyle = r() < 0.5 ? '#f6d23c' : '#f08a22'; g.fillRect(x - 5, y - 5, 10, 10);
     }
-    // 火山口熔岩脉动
+    // Lava pulsing in the crater
     g.fillStyle = `rgba(246,160,40,${0.55 + 0.45 * Math.sin(t * 9)})`; g.beginPath(); g.ellipse(560, 220, 20, 6, 0, 0, Math.PI * 2); g.fill();
     g.restore();
   }
-  // 少女：罗马斯托拉＋红色披肩＋金发罗马发髻
+  // Girl: Roman stola + red palla + golden Roman bun
   const rot = (G, x, y) => { const c = Math.cos(G.tilt), s = Math.sin(G.tilt), X = x - 1300, Y = y - 425; return [1300 + X * c - Y * s, 425 + X * s + Y * c]; };
-  // 近侧手臂：不用骨架原举杯路线（终点杯子戳在鼻子上、手臂挡脸）。杯沿右端贴到唇高、倾角 ≤8.6°，手托在杯脚下，
-  // 杯子走「桌面 → 前上方 → 唇前」的二次贝塞尔；IK 用骨架同一副臂长（165/122）与肘向。
+  // Near arm: doesn't use the skeleton's original cup-raising path (its end point jabs the cup into the nose and the arm blocks the face). The right end of the cup rim goes to lip height with a tilt ≤8.6°, the hand supporting the foot of the cup;
+  // the cup follows a quadratic Bézier "tabletop → up and forward → in front of the lips"; the IK uses the skeleton's same arm lengths (165/122) and elbow direction.
   function armPose(G, k) {
     const S = G.A.shoulder, lip = G.lips[0];
     const A0 = [1186, 584], A2 = [lip[0] - 31, lip[1] - 3], A1 = [1150, 470], u = 1 - k;
@@ -213,10 +213,10 @@ SCENES['04_roman'] = (() => {
     g.fillStyle = C.gold; g.beginPath(); g.arc(G.ear[0] - 1, G.ear[1] + 16, 5, 0, Math.PI * 2); g.fill();
     F(G.bangs, C.hair, 6);
     g.strokeStyle = C.hairD; g.lineWidth = 4; G.hairLines.forEach(h => g.stroke(h));
-    // 红色发带
+    // Red hair ribbon
     const f0 = rot(G, 1256, 322), f1 = rot(G, 1282, 294), f2 = rot(G, 1342, 286), f3 = rot(G, 1378, 334);
     g.strokeStyle = C.red; g.lineWidth = 8; g.beginPath(); g.moveTo(...f0); g.bezierCurveTo(...f1, ...f2, ...f3); g.stroke();
-    // 五官（小石块尺度：眼一块深色，眉、唇）
+    // Features (at small-tessera scale: one dark tessera for the eye, brow, lips)
     if (blink) { g.strokeStyle = C.eye; g.lineWidth = 4; g.stroke(G.lid); }
     else { g.fillStyle = '#fbf8f0'; g.beginPath(); g.ellipse(G.eye.x + 3, G.eye.y + 1, 13, 7, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = C.eye; g.beginPath(); g.ellipse(G.eye.x - 1, G.eye.y + 1, 8, 7, 0, 0, Math.PI * 2); g.fill(); g.strokeStyle = C.eye; g.lineWidth = 5; g.stroke(G.lid); }
     g.strokeStyle = '#4a3020'; g.lineWidth = 6; g.stroke(G.brow);
@@ -225,11 +225,11 @@ SCENES['04_roman'] = (() => {
       F(AP.upperArm, C.skin, 6); F(AP.foreArm, C.skin, 6);
       g.save(); g.clip(AP.upperArm); const sh0 = G.A.shoulder; g.fillStyle = C.stola; g.beginPath(); g.arc(sh0[0], sh0[1], 62, 0, Math.PI * 2); g.fill(); g.strokeStyle = C.red; g.lineWidth = 9; g.beginPath(); g.arc(sh0[0], sh0[1], 62, 0, Math.PI * 2); g.stroke(); g.restore(); g.strokeStyle = C.outline; g.lineWidth = 6; g.stroke(AP.upperArm);
       F(AP.cuff, C.gold, 0);
-      F(AP.hand, C.skin, 6);          // 手托杯脚；杯子本身由 cupSprite 叠在马赛克上
+      F(AP.hand, C.skin, 6);          // the hand supports the foot of the cup; the cup itself is laid over the mosaic by cupSprite
     }
     g.restore();
   }
-  // 猫：用 RIG.cat 的锚点重画——平滑梨形身体、虎斑、白胸白爪、大黄眼、红项圈
+  // Cat: redrawn using RIG.cat's anchors — smooth pear-shaped body, tabby stripes, white chest and paws, big yellow eyes, red collar
   const CATS = 0.85, catT = (g) => { g.translate(540, 905); g.scale(CATS, CATS); g.translate(-540, -905); };
   const catPt = ([x, y]) => [540 + (x - 540) * CATS, 905 + (y - 905) * CATS];
   function cat(g, K) {
@@ -237,29 +237,29 @@ SCENES['04_roman'] = (() => {
     const body = RIG.smooth(K.bodyPts);
     const tail = new Path2D(); K.tailPts.forEach((q, i) => i ? tail.lineTo(...q) : tail.moveTo(...q));
     g.strokeStyle = C.halo; g.lineWidth = 50; g.stroke(body); g.stroke(K.head); K.legs.forEach(l => g.stroke(l)); g.lineWidth = K.tailW + 50; g.stroke(tail);
-    // 尾巴：深描边 → 橘 → 深橘环纹 → 白尖
+    // Tail: dark outline → orange → dark orange rings → white tip
     g.strokeStyle = C.outline; g.lineWidth = K.tailW + 12; g.stroke(tail);
     g.strokeStyle = C.catO; g.lineWidth = K.tailW; g.stroke(tail);
     g.strokeStyle = C.catS; g.setLineDash([9, 13]); g.lineDashOffset = 4; g.lineWidth = K.tailW - 2; g.lineCap = 'butt'; g.stroke(tail); g.setLineDash([]); g.lineCap = 'round';
     const tip = K.tailPts[K.tailPts.length - 1]; g.fillStyle = C.catW; g.beginPath(); g.arc(tip[0], tip[1], K.tailW / 2, 0, Math.PI * 2); g.fill();
-    // 身体
+    // Body
     g.fillStyle = C.catO; g.fill(body);
     g.save(); g.clip(body); g.fillStyle = C.catO2; g.beginPath(); g.ellipse(K.bodyPts[2][0] + 10, K.bodyPts[2][1] + 40, 52, 110, 0.1, 0, Math.PI * 2); g.fill();
     g.strokeStyle = C.catS; g.lineWidth = 10; K.stripes.slice(3).forEach(s => { g.beginPath(); g.moveTo(...s[0]); g.lineTo(...s[1]); g.stroke(); });
     const hx = K.bodyPts[1][0], hy = K.bodyPts[1][1];
-    g.lineWidth = 8; g.strokeStyle = C.catS; g.beginPath(); g.arc(hx + 62, hy - 6, 50, Math.PI * 0.95, Math.PI * 1.6); g.stroke();         // 后腿轮廓
+    g.lineWidth = 8; g.strokeStyle = C.catS; g.beginPath(); g.arc(hx + 62, hy - 6, 50, Math.PI * 0.95, Math.PI * 1.6); g.stroke();         // back-leg outline
     g.beginPath(); g.arc(hx + 62, hy - 6, 30, Math.PI * 1.0, Math.PI * 1.55); g.stroke();
     g.restore();
     g.strokeStyle = C.outline; g.lineWidth = 8; g.stroke(body);
     K.legs.forEach(l => { g.fillStyle = C.catW; g.fill(l); });
     g.fillStyle = C.catW; g.fill(K.white);
     K.legs.forEach(l => { g.strokeStyle = C.outline; g.lineWidth = 5; g.stroke(l); });
-    // 红项圈＋金坠
+    // Red collar + gold pendant
     const hc = K.headC;
     g.strokeStyle = C.collar; g.lineWidth = 13; g.beginPath(); g.moveTo(hc[0] - 46, hc[1] + 52); g.quadraticCurveTo(hc[0] + 2, hc[1] + 80, hc[0] + 52, hc[1] + 52); g.stroke();
     g.fillStyle = C.gold; g.beginPath(); g.arc(hc[0] + 6, hc[1] + 76, 7, 0, Math.PI * 2); g.fill();
-    // 头
-    // 头：正脸（庞贝猫马赛克是正面瞪眼）。脸中线 x≈604（两耳尖中点）
+    // Head
+    // Head: frontal face (the Pompeii cat mosaic stares straight out). Face center line x≈604 (midpoint of the two ear tips)
     const fx = hc[0] + 4, fy = hc[1];
     g.fillStyle = C.catO; g.fill(K.head);
     g.save(); g.clip(K.head); g.fillStyle = C.catW; g.beginPath(); g.ellipse(fx, fy + 30, 34, 24, 0, 0, Math.PI * 2); g.fill();
@@ -268,7 +268,7 @@ SCENES['04_roman'] = (() => {
     g.restore();
     g.strokeStyle = C.outline; g.lineWidth = 11; g.stroke(K.head);
     g.fillStyle = '#e9a08e'; K.earInner.forEach(e => { g.beginPath(); e.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.fill(); });
-    // 大黄圆眼＋黑竖瞳＋深色眼眶（庞贝猫标志）
+    // Big round yellow eyes + black vertical pupils + dark eye rims (the Pompeii cat's signature)
     [[fx - 24, fy - 8], [fx + 24, fy - 10]].forEach(([ex, ey]) => {
       const R = 17;
       if (K.blink) { g.fillStyle = C.catO; g.beginPath(); g.arc(ex, ey, R, 0, Math.PI * 2); g.fill(); g.strokeStyle = C.eye; g.lineWidth = 7; g.beginPath(); g.moveTo(ex - R, ey + 2); g.quadraticCurveTo(ex, ey + 8, ex + R, ey + 2); g.stroke(); }
@@ -279,9 +279,9 @@ SCENES['04_roman'] = (() => {
     g.restore();
   }
 
-  // ---------- 编舞 ----------
+  // ---------- choreography ----------
   const ease = U.ease.inOut;
-  const borderPhase = (lt) => 15 * lt + PER * ease(clamp((lt - 0.485) / 0.365));        // 匀速漂移＋原片 226–248 帧走一个周期
+  const borderPhase = (lt) => 15 * lt + PER * ease(clamp((lt - 0.485) / 0.365));        // constant drift + one period over the original film's frames 226–248
   const poses = (lt, t) => {
     const ch = P.choreo(lt, t);
     return { ch, G: RIG.girl({ cup: ch.cup, sip: ch.sip, breathe: ch.breathe }), K: RIG.cat({ tail: ch.tail * 1.6, blink: ch.blink, breathe: ch.breathe }) };
@@ -295,17 +295,17 @@ SCENES['04_roman'] = (() => {
     girl(g, G, { steam: 1 - ch.cup * 0.85, t, blink: ch.blink, cup: ch.cup });
   }
 
-  // ---------- 镶嵌渲染器：布局（只算一次） ----------
+  // ---------- mosaic renderer: layout (computed only once) ----------
   let S = null;
   function build() {
     const t0 = performance.now();
     const sb = P.cached('rm_static', W, H, g => staticScene(g));
     const mk = () => { const cv = P.canvas(); return [cv, cv.getContext('2d', { willReadFrequently: true })]; };
-    // 结构图（决定石块怎么排）：静态＋少女（不含会动的近侧手臂）＋猫
+    // Structure map (decides how tesserae are laid): static + girl (excluding the moving near arm) + cat
     const [sc, sg] = mk(); sg.drawImage(sb, 0, 0);
     const G0 = RIG.girl({ cup: 0 }), K0 = RIG.cat({});
     cat(sg, K0); girl(sg, G0, { nearArm: false, steam: 0 });
-    // 类别图
+    // Class map
     const [cc, cg] = mk(); const cs = k => `rgb(${k * 16},0,0)`;
     cg.fillStyle = cs(K_WALL); cg.fillRect(0, 0, W, H);
     cg.fillStyle = cs(K_FLOOR); cg.fillRect(BW, 905, W - 2 * BW, H - BW - 905);
@@ -322,7 +322,7 @@ SCENES['04_roman'] = (() => {
     for (let i = 0; i < W * H; i++) CL[i] = Math.round(cd[i * 4] / 16);
     const sdat = sg.getImageData(0, 0, W, H).data;
     for (let y = 905; y < H - BW; y++) for (let x = 255; x < 885; x++) { const i = y * W + x; if (sdat[i * 4] + sdat[i * 4 + 1] + sdat[i * 4 + 2] < 240) CL[i] = K_TEXT; }
-    // 半分辨率：边缘 → 精确欧氏距离变换（Felzenszwalb）
+    // Half resolution: edges → exact Euclidean distance transform (Felzenszwalb)
     const HW = 960, HH = 540, N = HW * HH;
     const hc = P.canvas(HW, HH), hg = hc.getContext('2d', { willReadFrequently: true }); hg.drawImage(sc, 0, 0, HW, HH);
     const hd = hg.getImageData(0, 0, HW, HH).data;
@@ -336,21 +336,21 @@ SCENES['04_roman'] = (() => {
       if (!e && y < HH - 1 && CH[i] !== CH[i + HW] && (CH[i] === K_BORDER || CH[i + HW] === K_BORDER)) e = true;
       F[i] = e ? 0 : 1e20;
     }
-    const D = edt(F, HW, HH);                             // 半分辨率像素的平方距离 → 全分辨率像素距离
+    const D = edt(F, HW, HH);                             // squared distances in half-resolution pixels → distances in full-resolution pixels
     for (let i = 0; i < N; i++) D[i] = Math.sqrt(D[i]) * 2;
     const tangent = (i) => { const x = i % HW, y = (i / HW) | 0; const gx = D[i + (x < HW - 1 ? 1 : 0)] - D[i - (x > 0 ? 1 : 0)], gy = D[i + (y < HH - 1 ? HW : 0)] - D[i - (y > 0 ? HW : 0)]; return Math.atan2(gy, gx) + Math.PI / 2; };
-    // 石块种子：空间哈希保证最小间距
+    // Tessera seeds: a spatial hash guarantees minimum spacing
     const sx = [], sy = [], ss = [], sa = [], scl = [];
     const CS = 24, GWc = Math.ceil(W / CS), GHc = Math.ceil(H / CS), cell = Array.from({ length: GWc * GHc }, () => []);
     const ok = (x, y, s, f) => { const cx = (x / CS) | 0, cy = (y / CS) | 0; for (let j = cy - 1; j <= cy + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { if (i < 0 || j < 0 || i >= GWc || j >= GHc) continue; for (const k of cell[j * GWc + i]) { const m = f * (s + ss[k]) / 2; const dx = sx[k] - x, dy = sy[k] - y; if (dx * dx + dy * dy < m * m) return false; } } return true; };
     const add = (x, y, s, a, c) => { const k = sx.length; sx.push(x); sy.push(y); ss.push(s); sa.push(a); scl.push(c); cell[((y / CS) | 0) * GWc + ((x / CS) | 0)].push(k); return k; };
-    // ① 外框：沿边成行
+    // ① Outer frame: in rows along the edges
     const r = rng(2079), NR = 11, bs = BW / NR;
     for (const [a, b, c2, d, e, f, len] of SIDES) {
       for (let j = 0; j < NR; j++) { let u = BW + (j % 2) * bs * 0.5 + r() * 2; while (u < len - BW) { const w = bs * (0.86 + r() * 0.28), uc = u + w / 2, v = (j + 0.5) * bs; add(a * uc + c2 * v + e, b * uc + d * v + f, bs, Math.atan2(b, a) + (r() - .5) * 0.06, K_BORDER); u += w; } }
     }
     for (const [x0, y0] of [[0, 0], [W - BW, 0], [0, H - BW], [W - BW, H - BW]]) for (let j = 0; j < NR; j++) for (let i = 0; i < NR; i++) add(x0 + (i + 0.5) * bs, y0 + (j + 0.5) * bs, bs, (r() - .5) * 0.06, K_BORDER);
-    // ② 沿轮廓：在距离场等值线 d=(k+½)s 上走线，每走一个石块宽放一块
+    // ② Along outlines: walk the distance-field contour lines d=(k+½)s, placing a tessera every tessera width
     const cand = new Uint8Array(N), vis = new Uint8Array(N);
     for (let i = 0; i < N; i++) { const c = CH[i]; if (c === K_BORDER) continue; const s = SZ[c], d = D[i]; if (d < 1) continue; const k = Math.floor(d / s); if (k >= KR[c]) continue; if (Math.abs(d - (k + 0.5) * s) < 1.5) cand[i] = 1; }
     const NB = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
@@ -366,7 +366,7 @@ SCENES['04_roman'] = (() => {
         dx = dx * 0.6 + bx * 0.4; dy = dy * 0.6 + by * 0.4; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; cur = best;
       }
     }
-    // ③ 其余：规则成行（砖缝错半块）＋补洞
+    // ③ The rest: regular rows (joints offset by half a tessera) + filling holes
     for (let c = 0; c < SZ.length; c++) {
       if (c === K_BORDER) continue; const s = SZ[c];
       for (let j = 0; (j + 0.5) * s < H; j++) for (let i = -1; (i + 0.5) * s < W; i++) {
@@ -378,7 +378,7 @@ SCENES['04_roman'] = (() => {
         if (ok(x, y, s, 0.86)) add(x, y, s, contour ? tangent(hi) : (r() - .5) * 0.07, c);
       }
     }
-    // ④ 光栅化：加权 L∞ Voronoi（每块石头四边独立抖动 → 不规则方块），D2−D1 太小处是灰浆缝
+    // ④ Rasterization: weighted L∞ Voronoi (each tessera's four sides jittered independently → irregular squares); where D2−D1 is too small is a grout gap
     const n = sx.length;
     const HUP = new Float32Array(n), HUM = new Float32Array(n), HVP = new Float32Array(n), HVM = new Float32Array(n), CA = new Float32Array(n), SA = new Float32Array(n);
     const JL = new Float32Array(n), TR = new Float32Array(n), TG = new Float32Array(n), TB = new Float32Array(n), SIDX = new Int32Array(n);
@@ -402,7 +402,7 @@ SCENES['04_roman'] = (() => {
         if (Dd < D1[p]) { D2[p] = D1[p]; D1[p] = Dd; ID[p] = k; } else if (Dd < D2[p]) D2[p] = Dd;
       } }
     }
-    // ⑤ 每像素：石块 or 灰浆；石面斜面明暗（左上受光）＋颗粒
+    // ⑤ Per pixel: tessera or grout; bevel shading on the stone face (lit from the top left) + grain
     const SH = new Uint8Array(W * H), LX = -0.6, LY = -0.8;
     const gr = rng(7);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -420,7 +420,7 @@ SCENES['04_roman'] = (() => {
       }
       SH[p] = clamp(Math.round(sh * 128), 0, 255);
     }
-    // ⑥ 第 0 帧全幅上色 → 静态马赛克
+    // ⑥ Frame 0 colored in full → static mosaic
     const [bc, bg] = mk();
     fullBase(bg, sb, 0, 3.28125);
     const bd = bg.getImageData(0, 0, W, H).data;
@@ -435,7 +435,7 @@ SCENES['04_roman'] = (() => {
       SO[o + 3] = 255;
     }
     og.putImageData(oimg, 0, 0);
-    // ⑦ 动态矩形：由各姿态的包围盒算出
+    // ⑦ Dynamic rectangles: computed from the bounding boxes of each pose
     const bbox = (pts, m) => { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }); return [Math.max(0, (x0 - m) | 0), Math.max(0, (y0 - m) | 0), Math.min(W, Math.ceil(x1 + m)), Math.min(H, Math.ceil(y1 + m))]; };
     const gp = [[1180, 270], [1460, 720]];
     for (let cu = 0; cu <= 1.001; cu += 0.05) for (const sip of [0, 0.15]) { const G = RIG.girl({ cup: cu, sip }), A = armPose(G, cu); gp.push(A.H, A.E, G.A.headTop, G.A.forehead, G.A.chin, G.A.nape, [A.cup.x - 40, A.cup.y - 95], [A.cup.x + 40, A.cup.y + 60], [G.bunSpiral[0] + 36, G.bunSpiral[1] - 36]); }
@@ -448,8 +448,8 @@ SCENES['04_roman'] = (() => {
     S = { sb, bc, bg, oc, og, ID, SH, SO, TCr, TCg, TCb, color, rects, dyn: Int32Array.from(dyn), n, strip: borderStrip(), cupSp: cupSprite(), ms: performance.now() - t0 };
     window.__rm_stats = { tiles: n, dynTiles: dyn.length, buildMs: Math.round(S.ms), rects: rects.map(R => [R.x, R.y, R.w, R.h]) };
   }
-  // 外框：一条「周期 = 卷涡周期 81px」的石块带（石块布局也按 81px 循环），每帧整条平移相位——
-  // 石块跟着图案一起走（像传送带），比「石块不动只换色」明显得多（7.6px 石块会把 1–3px/帧的相位移动量化掉）。
+  // Outer frame: a band of tesserae with "period = the 81px scroll period" (the tessera layout also loops every 81px), the whole band's phase shifted every frame —
+  // the tesserae move with the pattern (like a conveyor belt), far more visible than "tesserae still, only colors change" (7.6px tesserae would quantize away a phase shift of 1–3px per frame).
   function borderStrip() {
     const NP = 26, SL = PER * NP, NR = 11, bs = BW / NR;
     const pc = P.canvas(SL, BW), pg = pc.getContext('2d', { willReadFrequently: true });
@@ -477,7 +477,7 @@ SCENES['04_roman'] = (() => {
     }
     return sc;
   }
-  // 杯子：4.4px 小石块拼片（深色描边石块＋金色杯身＋亮杯口＋双耳＋杯脚），整块随手移动
+  // Cup: a mosaic of small 4.4px tesserae (dark outline tesserae + gold cup body + bright rim + two handles + foot), moving as one piece with the hand
   const CSC = 1.3, CSP = [80, 24];
   function cupSprite() {
     const w = 170, h = 110, fc = P.canvas(w, h), fg = fc.getContext('2d', { willReadFrequently: true });
@@ -494,7 +494,7 @@ SCENES['04_roman'] = (() => {
     fg.fillStyle = '#f2d77c'; fg.beginPath(); fg.ellipse(0, 0, cw / 2, 5.5, 0, 0, Math.PI * 2); fg.fill(); fg.strokeStyle = C.outline; fg.lineWidth = 4; fg.stroke();
     fg.fillStyle = '#7a5418'; fg.beginPath(); fg.ellipse(0, 0.5, cw / 2 - 6, 2.6, 0, 0, Math.PI * 2); fg.fill();
     const fd = fg.getImageData(0, 0, w, h).data, sp = P.canvas(w, h), sg = sp.getContext('2d'), ts = 4.4, r = rng(91);
-    // 灰浆底：只在杯形（alpha）里
+    // Grout base: only inside the cup shape (alpha)
     sg.drawImage(fc, 0, 0); sg.globalCompositeOperation = 'source-in'; sg.fillStyle = 'rgb(96,86,74)'; sg.fillRect(0, 0, w, h); sg.globalCompositeOperation = 'source-over';
     for (let y = 0; y < h; y += ts) for (let x = ((y / ts) % 2) * ts * 0.5 - ts; x < w; x += ts) {
       const cx = x + ts / 2, cy = y + ts / 2; if (cx < 0 || cx >= w || cy >= h) continue;
@@ -504,7 +504,7 @@ SCENES['04_roman'] = (() => {
     }
     return sp;
   }
-  function steamTiles(c, cup, t, a) {            // 白石热气：两列方石沿正弦上行
+  function steamTiles(c, cup, t, a) {            // white-stone steam: two columns of square tesserae rising along a sine
     if (a < 0.03) return;
     c.save(); c.globalAlpha = a;
     for (let k = 0; k < 2; k++) for (let i = 0; i < 7; i++) {
@@ -513,7 +513,7 @@ SCENES['04_roman'] = (() => {
     }
     c.restore();
   }
-  function edt(F, w, h) {                                 // 2D 平方欧氏距离变换（Felzenszwalb–Huttenlocher）
+  function edt(F, w, h) {                                 // 2D squared Euclidean distance transform (Felzenszwalb–Huttenlocher)
     const n = Math.max(w, h), f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
     const pass = (len) => { let k = 0; v[0] = 0; z[0] = -1e30; z[1] = 1e30;
       for (let q = 1; q < len; q++) { let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); } k++; v[k] = q; z[k] = s; z[k + 1] = 1e30; }
@@ -543,10 +543,10 @@ SCENES['04_roman'] = (() => {
         og.putImageData(R.img, R.x, R.y);
       }
       c.drawImage(S.oc, 0, 0);
-      // 外框传送带：同一条周期石块带，四边各自局部坐标（顺时针），按相位平移
+      // Outer-frame conveyor belt: the same periodic tessera band, each side in its own local coordinates (clockwise), shifted by phase
       const off = ((borderPhase(lt) % PER) + PER) % PER;
       for (const [a, b, c2, d, e, f, len] of SIDES) { c.save(); c.transform(a, b, c2, d, e, f); c.beginPath(); c.rect(BW, 0, len - 2 * BW, BW); c.clip(); c.drawImage(S.strip, BW - 2 * PER + off, 0); c.restore(); }
-      // 杯子拼片与热气（跟着手走）
+      // Cup mosaic and steam (following the hand)
       const { ch, G } = poses(lt, t), AP = armPose(G, ch.cup);
       c.save(); c.translate(AP.cup.x, AP.cup.y); c.rotate(AP.cup.tilt); c.drawImage(S.cupSp, -CSP[0], -CSP[1]); c.restore();
       steamTiles(c, AP.cup, t, 1 - ch.cup * 0.85);

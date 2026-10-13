@@ -2,40 +2,40 @@
 # requires-python = ">=3.10"
 # dependencies = ["numpy", "opencv-python-headless"]
 # ///
-"""film_gate.py —— 只读成片 mp4，量「翻页式 PPT 感」。交付前由 deliver.py 调用，也可以单独跑。
+"""film_gate.py — reads only the final mp4 and measures "page-flip PowerPoint feel". Called by deliver.py before delivery; can also run on its own.
 
-用法：
-  uv run film_gate.py 成片.mp4 [--json] [--vertical auto|yes|no] [--sub-band 0.15]
-                      [--template 示范片.mp4] [--no-template]
+Usage:
+  uv run film_gate.py film.mp4 [--json] [--vertical auto|yes|no] [--sub-band 0.15]
+                      [--template demo.mp4] [--no-template]
 
-退出码：红灯 2；黄灯、绿灯 0；读不了文件 1。
-只依赖 ffmpeg/ffprobe 和 opencv，不依赖 art-motion 引擎，任何来源的成片都能量。
+Exit codes: red 2; yellow or green 0; can't read the file 1.
+Depends only on ffmpeg/ffprobe and opencv, not on the art-motion engine, so it can measure a film from any source.
 
-门禁两条。第一条：快速运动帧占比（镜头内部相邻帧平均灰度差 ≥9 的帧对占比，12fps、320 宽灰度、
-屏蔽底部字幕带；像切点的帧和交叉淡化窗口整段排除，转场再快也不算）。< 0.035 红灯，< 0.06 黄灯。
-标定（2026-10-09）：作者本人表过态的 13 支片（9 支认可、4 支否定），它是唯一单独就能把两组干净分开、
-阈值两侧都有余量的指标——认可的最低 0.068，否定的最高 0.021；帧差阈值在 6–13 之间取值都能分开。
-样本只有 13 支，读作「这 13 支里没有反例」，不是已经证明。
+Gate one: fast-motion frame ratio (the share of in-shot adjacent frame pairs with a mean gray difference ≥9, at 12fps, 320-wide grayscale,
+masking the bottom subtitle band; cut-like frames and crossfade windows are excluded entirely, however fast a transition is). < 0.035 red, < 0.06 yellow.
+Calibration (2026-10-09): 13 films the author gave verdicts on (9 approved, 4 rejected); it's the only metric that alone separates the two groups cleanly,
+with margin on both sides of the threshold — approved minimum 0.068, rejected maximum 0.021; any frame-difference threshold between 6–13 separates them.
+There are only 13 samples, so read it as "no counterexample among these 13", not as proven.
 
-第二条门禁是事实类硬伤，不靠品味标定：中段近乎纯色的空画面。去掉首尾各 0.5 秒和转场窗口（切点前后两帧、
-交叉淡化整段），一帧里梯度 >24 的像素不到 0.2%（整帧几乎没有任何边缘或纹理，同样 12fps、320 宽灰度、屏蔽字幕带）
-算空帧，连续 ≥0.3 秒红灯，报告给出每一段的时间码。按边缘判、不按颜色判：黑底 3b1b 的细线和公式、白板上的笔画
-都是边缘，不会误伤；「画面 95% 是同一色」这种按颜色的判法在标定集里会把认可的白板片判成 3 秒空画面，所以不用。
-标定数据里的 32 支片（含作者表过态的 13 支、9 支认可）没有一支出现过连续 2 帧的空帧。短片降级不适用于这一条。
+Gate two is a factual defect that doesn't rely on calibrated taste: a near-solid empty frame mid-film. Excluding 0.5 seconds at each end and transition windows
+(two frames either side of a cut, whole crossfades), a frame where fewer than 0.2% of pixels have gradient >24 (almost no edges or texture in the whole frame; same 12fps, 320-wide grayscale, subtitle band masked)
+counts as blank, and a run of ≥0.3 seconds is red, with timecodes reported for each run. Judged by edges, not color: the thin lines and formulas of black-background 3b1b and the strokes on a whiteboard
+are all edges, so they aren't hit by mistake; a color-based rule like "95% of the frame is one color" would judge an approved whiteboard film as 3 seconds of empty frame in the calibration set, so it isn't used.
+None of the 32 films in the calibration data (including the 13 with the author's verdict, 9 approved) ever has 2 consecutive blank frames. The short-clip downgrade doesn't apply to this gate.
 
-第三条门禁：蓝紫底画面时长占比（作者原话「我们需要规避下蓝、紫渐变的垃圾配色，这种非常ai slop」）。
-2fps、160 宽 RGB，像素色相 225°–300°、饱和度 ≥0.30、亮度 0.06–0.90 算蓝紫；一帧里蓝紫像素 ≥30% 算蓝紫帧。
-蓝紫帧占比 ≥0.30 红灯，≥0.12 黄灯。标定（2026-10-10）：88 支片里作者认可的 9 支最高 0.10（花叔穿越名画），
-大多为 0；他否掉或两支都不要的片子 0.46–1.00（深紫星空＋白壳机器人那支 0.94）。海军蓝平涂（色相约 210°）不算。
-题材本身要蓝紫（用户点名的赛博朋克紫、梵高星月夜这类风格画面）时，用 --allow-blue-purple "理由" 降为黄灯，
-理由原样写进交付说明的事实段。
+Gate three: the share of time with a blue-purple background (the author: "we need to avoid that garbage blue-purple gradient color scheme, this is very AI slop").
+2fps, 160-wide RGB; pixels with hue 225°–300°, saturation ≥0.30 and value 0.06–0.90 count as blue-purple; a frame with ≥30% blue-purple pixels counts as a blue-purple frame.
+Blue-purple frames ≥0.30 red, ≥0.12 yellow. Calibration (2026-10-10): among 88 films, the 9 approved by the author peak at 0.10 (Huashu Walks Through Famous Paintings),
+mostly 0; films the author rejected, or pairs where both were rejected, are 0.46–1.00 (the deep-purple starry sky + white-shell robot one is 0.94). Flat navy (hue about 210°) doesn't count.
+When the topic itself needs blue-purple (a cyberpunk purple the user explicitly asked for, style images like Van Gogh's Starry Night), use --allow-blue-purple "reason" to downgrade to yellow;
+the reason is written verbatim into the facts section of the delivery notes.
 
-其余指标只报告（最多黄灯，不拦）。静止类指标（静止帧占比、最长连续静止、最长无事件间隔）会把
-「停住→猛动→停住」的好片判反，所以绝不能拿来当门禁；黄灯只是「去看这一段」。
+All other metrics are only reported (at most yellow, never blocking). Stillness metrics (still-frame share, longest continuous stillness, longest gap without events) would judge
+good films that "hold → move hard → hold" backwards, so they must never be used as gates; yellow only means "go look at this stretch".
 
-拦不住的：每页硬塞一次推近的 PPT（「推近次数」黄灯提示去看）、前紧后松（看最差 30 秒窗口）、页框与米底小图、讲不明白。
-快动帧不分快慢：1 秒左右推近 20% 的缓推和 0.28 秒快推记的快动帧差不多（2026-10-12 用诺奖短片三帧实测），过门不需要把镜头改快。
-「去看」的黄灯项和独立审片仍然要做。
+What it can't block: PowerPoint with a push-in forced onto every page (the "push-in count" yellow says go look), tight start / loose end (look at the worst 30-second window), page frames and small images on beige, unclear explanations.
+Fast-motion frames don't distinguish fast from slow: a slow push of about 20% over 1 second scores about the same fast-motion frames as a 0.28-second fast push (measured on three shots of the Nobel short on 2026-10-12), so there's no need to speed up the camera to pass the gate.
+The "go look" yellow items and the independent review still have to be done.
 """
 from __future__ import annotations
 
@@ -49,48 +49,48 @@ import sys
 import cv2
 import numpy as np
 
-FPS = 12            # 分析帧率
-WIDTH = 320         # 分析宽度（竖屏也是 320 宽）
-SAMPLE_FPS = 2      # 面积类指标的抽样帧率
-# 全风格样片随 Release 发布，不在仓库里；放到 assets/ 下才比「照搬示范构图」，没有就跳过这一项
-DEFAULT_TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "全风格样片.mp4")
+FPS = 12            # analysis frame rate
+WIDTH = 320         # analysis width (portrait is also 320 wide)
+SAMPLE_FPS = 2      # sampling frame rate for area metrics
+# The all-style sample film ships with Releases and isn't in the repository; only when placed under assets/ is "copying the demo composition" compared (rename the upstream release file to this name), otherwise this item is skipped
+DEFAULT_TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "all-styles-demo.mp4")
 
-# ---------------------------------------------------------------- 阈值表
-# gate=True 的指标才会亮红灯并让脚本非零退出；其余只报告（最多黄灯，'info' 不打灯）。
-# 方向 'high_bad'：值越大越可疑；'low_bad'：值越小越可疑；'info'：只给数，不判好坏。
-# 标定：2026-10-09 用作者本人判过的 13 支片（9 正 4 负），见文件头。阈值不要随手改：改了要用新的表态片重标。
-# 门禁只放「单个指标就能把正负例干净分开、阈值两边都有余量」的指标（fast_ratio），和不需要标定的事实类硬伤（blank_run_s）。
-# 黄线是从同一批片子读出来的经验线，样本太少，不能当判决，只提示「去看这一段」。
+# ---------------------------------------------------------------- threshold table
+# Only metrics with gate=True can light red and make the script exit non-zero; the rest are only reported (at most yellow, 'info' gets no light).
+# Direction 'high_bad': the larger, the more suspicious; 'low_bad': the smaller, the more suspicious; 'info': number only, no judgment.
+# Calibration: on 2026-10-09 with 13 films the author judged (9 positive, 4 negative), see the file header. Don't change thresholds casually: any change needs recalibration with new verdict films.
+# Gates contain only metrics that "alone separate positive and negative examples cleanly, with margin on both sides" (fast_ratio), plus factual defects that need no calibration (blank_run_s).
+# Yellow lines are rules of thumb read from the same batch of films; the sample is too small to serve as a verdict, so they only say "go look at this stretch".
 METRICS = {
-    # key: (中文名, 方向, 黄线, 红线, 是否门禁, 单位)
-    "fast_ratio":         ("快速运动帧占比", "low_bad", 0.06, 0.035, True, ""),
-    "blank_run_s":        ("中段近乎纯色的空画面（最长连续）", "high_bad", None, 0.3, True, "秒"),
-    "blue_purple_share":  ("蓝紫底画面时长占比", "high_bad", 0.12, 0.30, True, ""),
-    "fast_ratio_worst_window": ("最差30秒窗口的快动帧占比", "low_bad", 0.02, None, False, ""),
-    "top10_share":        ("运动集中度（前10%帧占运动量）", "info", None, None, False, ""),
-    "drift_ratio":        ("慢漂帧占比", "high_bad", 0.65, None, False, ""),
-    "still_ratio":        ("静止帧占比（静止本身不是坏事）", "info", None, None, False, ""),
-    "longest_still_s":    ("最长连续静止", "high_bad", 6.0, None, False, "秒"),
-    "event_rate":         ("视觉事件密度", "low_bad", 2.0, None, False, "次/10秒"),
-    "max_event_gap_s":    ("最长无事件间隔", "high_bad", 15.0, None, False, "秒"),
-    "dead_bg":            ("死背景（扣相机后镜内不变）", "high_bad", 0.80, None, False, ""),
-    "dead_flat":          ("死且平的空底", "high_bad", 0.50, None, False, ""),
-    "flat_area":          ("平底色/空底面积", "info", None, None, False, ""),
-    "flat_light":         ("浅色空底面积（米底/白底）", "high_bad", 0.35, None, False, ""),
-    "page_frame_share":   ("固定页框时长占比", "high_bad", 0.30, None, False, ""),
-    "slow_zoom_share":    ("匀速慢缩放镜头时长占比", "high_bad", 0.70, None, False, ""),
-    "push_in_per_min":    ("推近次数（下限）", "high_bad", 8.0, None, False, "次/分钟"),
-    "fast_push_per_min":  ("其中 0.5 秒内的快推", "info", None, None, False, "次/分钟"),
-    "push_in_share":      ("推近占推拉事件比例", "info", None, None, False, ""),
-    "slow_cam_share":     ("慢漂相机镜头时长占比", "info", None, None, False, ""),
-    "dissolve_share":     ("交叉淡化占转场比例", "high_bad", 0.60, None, False, ""),
-    "local_fade_ratio":   ("原地淡变占变化帧比例", "info", None, None, False, ""),
-    "subject_box":        ("最大主体块占画面", "info", None, None, False, ""),
-    "template_sim_share": ("与示范构图相似的时长占比", "high_bad", 0.30, None, False, ""),
+    # key: (name, direction, yellow line, red line, is gate, unit)
+    "fast_ratio":         ("Fast-motion frame ratio", "low_bad", 0.06, 0.035, True, ""),
+    "blank_run_s":        ("Near-solid empty frame mid-film (longest run)", "high_bad", None, 0.3, True, "s"),
+    "blue_purple_share":  ("Share of time with blue-purple background", "high_bad", 0.12, 0.30, True, ""),
+    "fast_ratio_worst_window": ("Fast-motion ratio in the worst 30-second window", "low_bad", 0.02, None, False, ""),
+    "top10_share":        ("Motion concentration (share of motion in the top 10% of frames)", "info", None, None, False, ""),
+    "drift_ratio":        ("Slow-drift frame share", "high_bad", 0.65, None, False, ""),
+    "still_ratio":        ("Still-frame share (stillness itself isn't bad)", "info", None, None, False, ""),
+    "longest_still_s":    ("Longest continuous stillness", "high_bad", 6.0, None, False, "s"),
+    "event_rate":         ("Visual event density", "low_bad", 2.0, None, False, " per 10s"),
+    "max_event_gap_s":    ("Longest gap without events", "high_bad", 15.0, None, False, "s"),
+    "dead_bg":            ("Dead background (unchanging within shots after removing camera motion)", "high_bad", 0.80, None, False, ""),
+    "dead_flat":          ("Dead and flat empty background", "high_bad", 0.50, None, False, ""),
+    "flat_area":          ("Flat background / empty area", "info", None, None, False, ""),
+    "flat_light":         ("Light empty background area (beige/white)", "high_bad", 0.35, None, False, ""),
+    "page_frame_share":   ("Share of time inside a fixed page frame", "high_bad", 0.30, None, False, ""),
+    "slow_zoom_share":    ("Share of time in constant slow-zoom shots", "high_bad", 0.70, None, False, ""),
+    "push_in_per_min":    ("Push-in count (lower bound)", "high_bad", 8.0, None, False, " per min"),
+    "fast_push_per_min":  ("Of which fast pushes within 0.5s", "info", None, None, False, " per min"),
+    "push_in_share":      ("Push-ins as a share of push/pull events", "info", None, None, False, ""),
+    "slow_cam_share":     ("Share of time with slow-drift camera", "info", None, None, False, ""),
+    "dissolve_share":     ("Crossfades as a share of transitions", "high_bad", 0.60, None, False, ""),
+    "local_fade_ratio":   ("In-place fades as a share of changing frames", "info", None, None, False, ""),
+    "subject_box":        ("Largest subject block as a share of the frame", "info", None, None, False, ""),
+    "template_sim_share": ("Share of time similar to the demo composition", "high_bad", 0.30, None, False, ""),
 }
 
 
-# ---------------------------------------------------------------- 读帧
+# ---------------------------------------------------------------- reading frames
 def probe(path):
     out = subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -111,9 +111,9 @@ def decode_gray(path, fps=FPS, width=WIDTH, limit=None):
     return F, (W, H, dur)
 
 
-# ---------------------------------------------------------------- 全局相机运动
+# ---------------------------------------------------------------- global camera motion
 def pair_transform(a, b):
-    """a->b 的相似变换（LK 跟踪 + RANSAC）。返回 (M 2x3, 内点数, 内点率) 或 (None,0,0)。"""
+    """Similarity transform a->b (LK tracking + RANSAC). Returns (M 2x3, inlier count, inlier ratio) or (None,0,0)."""
     pts = cv2.goodFeaturesToTrack(a, maxCorners=300, qualityLevel=0.01, minDistance=6, blockSize=5)
     if pts is None or len(pts) < 15:
         return None, 0, 0.0
@@ -130,7 +130,7 @@ def pair_transform(a, b):
 
 
 def cam_speed(M, w, h, fps):
-    """变换在一组网格点上的平均位移，换算成「屏宽/秒」。"""
+    """Mean displacement of the transform over a grid of points, converted to "screen widths per second"."""
     if M is None:
         return 0.0
     xs, ys = np.meshgrid(np.linspace(0, w, 7), np.linspace(0, h, 7))
@@ -143,7 +143,7 @@ def to3(M):
     return np.vstack([M, [0, 0, 1]]) if M is not None else np.eye(3)
 
 
-# ---------------------------------------------------------------- 主分析
+# ---------------------------------------------------------------- main analysis
 def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     F, (W0, H0, dur) = decode_gray(path)
     is_vert = (H0 > W0) if vertical == "auto" else (vertical == "yes")
@@ -151,13 +151,13 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         sub_band = 0.18 if is_vert else 0.15
     n, h, w = F.shape
     hc = int(round(h * (1 - sub_band)))
-    F = np.ascontiguousarray(F[:, :hc])          # 屏蔽底部字幕带
+    F = np.ascontiguousarray(F[:, :hc])          # mask the bottom subtitle band
     h = hc
     if n < 4:
-        raise RuntimeError("帧太少，无法分析")
+        raise RuntimeError("Too few frames to analyze")
     F16 = F.astype(np.int16)
 
-    # --- 逐帧对：帧差、相机变换、补偿后残差、亮度直方图
+    # --- per frame pair: frame difference, camera transform, residual after compensation, brightness histogram
     d = np.zeros(n - 1); loc = np.zeros(n - 1); spd = np.zeros(n - 1); zr = np.zeros(n - 1)
     fade_px = np.zeros(n - 1)
     Ms = []
@@ -166,7 +166,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         diff = np.abs(F16[i + 1] - F16[i])
         d[i] = diff.mean()
         moved, wa = False, None
-        if d[i] < 0.05:                          # 完全一样：省掉估计
+        if d[i] < 0.05:                          # identical: skip estimation
             Ms.append(None); loc[i] = d[i]; fade_px[i] = -1; continue
         M, ni, ir = pair_transform(a, b)
         if M is not None and ni >= 20 and ir >= 0.35:
@@ -182,7 +182,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
             Ms.append(M)
         else:
             loc[i] = d[i]; Ms.append(None)
-        # 原地淡变：补偿相机后仍在变的像素里，光流几乎为 0（位置不动、只变亮度）的比例
+        # In-place fades: among pixels still changing after camera compensation, the share with near-zero optical flow (position fixed, only brightness changes)
         if d[i] > 0.3 and spd[i] < 0.05:
             base = wa if (Ms[-1] is not None and moved) else a
             ch = np.abs(F16[i + 1] - base.astype(np.int16)) > 10
@@ -194,9 +194,9 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
                 fade_px[i] = -1
         else:
             fade_px[i] = -1
-    # --- 硬切
-    # cut_like：所有「整帧突变、且不能用相机运动解释」的帧（含多帧的瓦片/像素/甩切转场）——统计运动时全部排除
-    # cut：连续的 cut_like 只取第一帧，用来数切点、分镜头
+    # --- hard cuts
+    # cut_like: every frame that "changes abruptly as a whole and can't be explained by camera motion" (including multi-frame tile/pixel/whip transitions) — all excluded when measuring motion
+    # cut: in a run of cut_like frames only the first is taken, used to count cuts and split shots
     cut_like = np.zeros(n - 1, bool)
     for i in range(n - 1):
         lo, hi = max(0, i - 6), min(n - 1, i + 7)
@@ -205,11 +205,11 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         cut_like[i] = d[i] >= max(8.0, 3 * med + 2) and loc[i] >= 0.6 * d[i]
     cut = cut_like & ~np.concatenate([[False], cut_like[:-1]])
 
-    # --- 交叉淡化：端点差异大、中间每帧变化都温和、中间帧是两端的线性混合
+    # --- crossfades: large difference between endpoints, every frame in between changes gently, and middle frames are a linear mix of the two ends
     diss = []                               # (a, b, center)
     in_diss = np.zeros(n - 1, bool)
     cand = []
-    for wdw in (2, 3, 5, 8, 12):            # 半窗 0.17s–1s
+    for wdw in (2, 3, 5, 8, 12):            # half-window 0.17s–1s
         for t in range(wdw, n - wdw):
             a_, b_ = t - wdw, t + wdw
             if cut_like[a_:b_].any():
@@ -218,7 +218,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
             if seg.max() > 0.75 * seg.sum() or seg.sum() < 10:
                 continue
             Dab = np.abs(F16[b_] - F16[a_])
-            if Dab.mean() < 10 or (Dab > 20).mean() < 0.20:   # 整帧级淡化；标题局部淡变一般只占几个百分点
+            if Dab.mean() < 10 or (Dab > 20).mean() < 0.20:   # whole-frame fades; local fades of a title usually cover only a few percent
                 continue
             cand.append((t, wdw))
     cand_set = {}
@@ -234,13 +234,13 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
             res.append(r); alphas.append(al)
         res = np.array(res); alphas = np.array(alphas)
         mono = np.all(np.diff(alphas) <= 0.08)
-        mid = (alphas > 0.15) & (alphas < 0.85)        # 真正「两张叠在一起」的中间帧
+        mid = (alphas > 0.15) & (alphas < 0.85)        # the middle frames that are truly "two images overlaid"
         if (mid.sum() >= 2 and res[mid].mean() < 0.22 and res.mean() < 0.25 and mono
                 and alphas[0] > 0.55 and alphas[-1] < 0.45):
             ks = np.arange(a_ + 1, b_)
-            tc = int(ks[np.argmin(np.abs(alphas - 0.5))])       # 混合系数过 0.5 的那一帧
+            tc = int(ks[np.argmin(np.abs(alphas - 0.5))])       # the frame where the mix coefficient crosses 0.5
             cand_set[(t, wdw)] = (a_, b_, res.mean(), float(np.abs(D).mean()), tc)
-    # 合并重叠：先取端点差最大的（整段淡化都在窗里），再看残差
+    # Merge overlaps: first take the largest endpoint difference (the whole fade within the window), then look at the residual
     for key in sorted(cand_set, key=lambda k: (-round(cand_set[k][3], 0), cand_set[k][2])):
         a_, b_, _, _, tc = cand_set[key]
         if in_diss[a_:b_].any():
@@ -249,7 +249,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         diss.append((a_, b_, tc))
     diss.sort()
 
-    # --- 镜头
+    # --- shots
     bounds = sorted(set([0] + [i + 1 for i in np.where(cut)[0]] + [c for _, _, c in diss] + [n]))
     shots = []
     for s, e in zip(bounds[:-1], bounds[1:]):
@@ -263,13 +263,13 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     n_cut, n_diss = int(cut.sum()), len(diss)
     blank_runs = blank_frames(F, cut_like, in_diss)
 
-    # --- 运动分布（排除转场帧）
+    # --- motion distribution (excluding transition frames)
     mv = np.where(trans, np.nan, d)
     good = ~np.isnan(mv)
     mvv = mv[good]
-    # 帧差口径：12fps、320 宽灰度、屏蔽字幕带后的平均绝对差（0–255）。
-    # 快动阈值 9 由标定得出（6–11 之间都能分开正负例，9 余量最大）；
-    # LK 相机速度会漏掉 0.3 秒级快推，标定里单用它分不开，所以不进「快动」定义。
+    # Frame difference measure: mean absolute difference at 12fps, 320-wide grayscale, subtitle band masked (0–255).
+    # The fast-motion threshold of 9 comes from calibration (anything from 6–11 separates positive and negative examples; 9 has the most margin);
+    # LK camera speed misses 0.3-second fast pushes and can't separate them on its own in calibration, so it isn't part of the "fast motion" definition.
     STILL, DRIFT_HI, FAST = 0.30, 3.0, 9.0
     still = mvv < STILL
     fast = mvv >= FAST
@@ -277,7 +277,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     srt = np.sort(mvv)[::-1]
     top10 = srt[: max(1, len(srt) // 10)].sum() / max(srt.sum(), 1e-6)
 
-    # 最长连续静止（全片帧序列，转场打断）
+    # Longest continuous stillness (whole-film frame sequence, broken by transitions)
     st_full = (d < STILL) & ~trans
     longest = run = longest_at = 0
     for i, v in enumerate(st_full):
@@ -285,7 +285,7 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         if run > longest:
             longest, longest_at = run, i - run + 1
 
-    # 事件：硬切、淡化、快速运动段（连续的快帧算一次）
+    # Events: hard cuts, fades, fast-motion stretches (consecutive fast frames count once)
     fast_full = np.zeros(n - 1, bool)
     fast_full[good] = fast
     ev_t = [i for i in np.where(cut)[0]] + [c for _, _, c in diss]
@@ -297,27 +297,27 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     ev_t = sorted(ev_t)
     secs = n / FPS
     gaps = np.diff([0] + ev_t + [n - 1]) / FPS
-    # 合并 0.3s 内重复的事件
+    # Merge repeated events within 0.3s
     ev_m = []
     for t in ev_t:
         if not ev_m or t - ev_m[-1] > 0.3 * FPS:
             ev_m.append(t)
     event_rate = len(ev_m) / secs * 10
 
-    # --- 每镜：死背景、慢缩放曲线
+    # --- per shot: dead background, slow-zoom curve
     dead_w, dead_flat_w, shot_w = [], [], []
     slow_zoom_dur, zoom_totals, slow_cam_dur = 0.0, [], 0.0
     for s, e in shots:
         L = e - s
         dur_s = L / FPS
-        # 累积变换：A_k 把镜头首帧坐标映到第 k 帧
+        # Cumulative transform: A_k maps the shot's first-frame coordinates to frame k
         A = [np.eye(3)]
         zc = [0.0]
         for k in range(s, e - 1):
             A.append(to3(Ms[k]) @ A[-1])
             zc.append(zc[-1] + (zr[k] if Ms[k] is not None else 0.0))
         zc = np.array(zc)
-        # 慢缩放：总缩放 2%–25%，单调铺满大半个镜头，且没有快推
+        # Slow zoom: total zoom 2%–25%, monotonic across most of the shot, with no fast push
         if dur_s >= 1.2:
             rates = np.abs(zr[s:e - 1]) * FPS
             tot = abs(zc[-1] - zc[0])
@@ -357,9 +357,9 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     dead_flat = float(np.average(dead_flat_w, weights=shot_w)) if len(shot_w) else 0.0
     slow_zoom_share = slow_zoom_dur / secs
 
-    # --- 推近事件：镜头内连续放大（每帧 >0.4%，12fps，中间允许断 1 帧）累计 ≥3% 算一次；0.5 秒内完成的记作快推。
-    # 2026-10-12 诺奖短片（102 秒，代码里推近约 48 次、全部往里）被判「太多、太快、不 smooth」之后加的，只报告、黄灯提示去看。
-    # 这是下限：实拍录像自己在动时相机变换估不出来，上面的推近量不到（那支片量到 20 次，约每分钟 12 次）。
+    # --- push-in events: continuous zoom-in within a shot (>0.4% per frame at 12fps, allowing a 1-frame break) accumulating ≥3% counts once; finished within 0.5 seconds counts as a fast push.
+    # Added after the 2026-10-12 Nobel short (102 seconds, about 48 push-ins in code, all inward) was judged "too many, too fast, not smooth"; only reported, with a yellow saying go look.
+    # This is a lower bound: when live footage moves on its own the camera transform can't be estimated, so those push-ins aren't measured (that film measured 20, about 12 per minute).
     def zoom_runs(mask, sign):
         ev, i = [], 0
         while i < len(mask):
@@ -376,14 +376,14 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
             else:
                 i += 1
         return ev
-    # 只排除切点那一帧和交叉淡化：紧跟切点起推的快推，会被「像切点」的窗口整段吞掉，用 trans 会漏一半
+    # Exclude only the cut frame itself and crossfades: a fast push starting right after a cut gets swallowed whole by the "cut-like" window, so using trans would miss half
     zx = cut | in_diss
     push_in = zoom_runs((zr > 0.004) & ~zx, 1)
     pull_out = zoom_runs((zr < -0.004) & ~zx, -1)
     fast_push = sum(1 for a, b in push_in if (b - a + 1) / FPS <= 0.5)
     zoom_cv = float(np.std(zoom_totals) / (np.mean(zoom_totals) + 1e-9)) if len(zoom_totals) >= 3 else float("nan")
 
-    # --- 抽样帧上的面积类指标
+    # --- area metrics on sampled frames
     step = max(1, FPS // SAMPLE_FPS)
     sidx = np.arange(0, n, step)
     if len(sidx) > 240:
@@ -417,19 +417,19 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
         subj.append(float(fill.mean()))
     flat_area = np.array(flat_area)
 
-    # --- 固定页框：同一屏幕位置、有纹理（字/线/logo）、在画面其余部分已经大变的时刻仍原样出现
+    # --- fixed page frame: textured content (text/lines/logo) at the same screen position, still appearing unchanged when the rest of the picture has changed a lot
     page_share = page_frame(S, sidx, cell_tex, BS, gh, gw, shots)
 
-    # --- 与示范构图相似
+    # --- similar to the demo composition
     tsim_share, tsim_max = float("nan"), float("nan")
     if template:
         tsim_share, tsim_max = template_similarity(F, shots, template)
 
-    # --- 原地淡入淡出占比：变化帧里局部结构符号一致（只变亮度不位移）的平均比例
+    # --- share of in-place fade-in/out: among changing frames, the average share where local structure has a consistent sign (brightness changes without moving)
     chg = (~trans) & (fade_px >= 0)
     lf = float(np.mean(fade_px[chg] > 0.7)) if chg.sum() > 5 else 0.0
 
-    # 前紧后松：最差的 30 秒窗口（片长不足 60 秒时取片长一半）里的快动帧占比
+    # Tight start / loose end: fast-motion ratio in the worst 30-second window (half the film length when the film is under 60 seconds)
     win = int(min(30.0, secs / 2) * FPS)
     fr_full = np.where(trans, np.nan, fast_full.astype(float))
     worst, worst_t = float("nan"), None
@@ -491,14 +491,14 @@ def analyze(path, sub_band=None, vertical="auto", template=None, verbose=False):
     return res
 
 
-FLAT_GRAD = 6.0     # 8x8 块平均梯度低于它算「平」（320 宽灰度）
-BLANK_GRAD, BLANK_FRAC = 24.0, 0.002   # 空帧：梯度 > 24 的像素不到 0.2%（标定集认可片的单帧最低是 0.30%，没有连续两帧低于它）
-BLANK_EDGE_S, BLANK_MIN_S = 0.5, 0.3   # 去掉首尾各 0.5 秒；连续 ≥0.3 秒才算
+FLAT_GRAD = 6.0     # mean gradient of an 8x8 block below this counts as "flat" (320-wide grayscale)
+BLANK_GRAD, BLANK_FRAC = 24.0, 0.002   # blank frame: fewer than 0.2% of pixels with gradient > 24 (the lowest single frame in approved calibration films is 0.30%, never two consecutive frames below it)
+BLANK_EDGE_S, BLANK_MIN_S = 0.5, 0.3   # exclude 0.5 seconds at each end; only runs of ≥0.3 seconds count
 
 
 def blank_frames(F, cut_like, in_diss):
-    """中段近乎纯色的空画面：[(起, 止) 秒]，只列 ≥ BLANK_MIN_S 的段。
-    按边缘判（整帧几乎没有梯度），不按颜色判；切点两侧的帧和交叉淡化窗口不算，跨过它们的段断开算。"""
+    """Near-solid empty frames mid-film: [(start, end) seconds], listing only runs ≥ BLANK_MIN_S.
+    Judged by edges (almost no gradient in the whole frame), not by color; frames either side of a cut and crossfade windows don't count, and runs crossing them are broken there."""
     n = len(F)
     blank = np.zeros(n, bool)
     for i, fr in enumerate(F):
@@ -515,16 +515,16 @@ def blank_frames(F, cut_like, in_diss):
             if (i - s0) / FPS >= BLANK_MIN_S - 1e-9: runs.append((round(s0 / FPS, 2), round(i / FPS, 2)))
             s0 = None
     return runs
-TEX_GRAD = 14.0     # 高于它算「有纹理」
-PAGE_GRAD = 25.0    # 页框格子要求的纹理（字、细线、logo 的强边）
+TEX_GRAD = 14.0     # above this counts as "textured"
+PAGE_GRAD = 25.0    # texture required of page-frame cells (strong edges of text, thin lines, logos)
 
 
 def page_frame(S, sidx, cell_tex, BS, gh, gw, shots):
-    """固定页框时长占比。
-    一个格子在某帧「复现」= 强纹理，且在 ≥3 个相隔 ≥3 秒、整体画面已明显不同的帧里同位原样出现。
-    全片里复现率 ≥25% 的格子算「页框格」（标题栏、页眉、页码、logo、进度条）；
-    某帧里页框格（且当帧复现）合计 ≥ 画面 1.5%，这一帧算被页框框住。
-    只复用同一段素材、同一张底纹的镜头，复现是零散的，过不了 25% 这一关。"""
+    """Share of time inside a fixed page frame.
+    A cell "recurs" in a frame = strong texture, appearing unchanged at the same position in ≥3 frames ≥3 seconds apart whose overall pictures clearly differ.
+    Cells recurring in ≥25% of the film count as "page-frame cells" (title bars, headers, page numbers, logos, progress bars);
+    if a frame's page-frame cells (also recurring in that frame) total ≥ 1.5% of the picture, that frame counts as framed by a page frame.
+    Shots that only reuse the same footage or background texture recur sporadically and don't pass the 25% bar."""
     N = len(S)
     if N < 6:
         return 0.0
@@ -563,7 +563,7 @@ _TPL_CACHE = {}
 def template_similarity(F, shots, template):
     if template not in _TPL_CACHE:
         T, _ = decode_gray(template, fps=2, limit=12)
-        T = T[:24]                                       # 前 12 秒
+        T = T[:24]                                       # first 12 seconds
         T = T[:, : int(T.shape[1] * 0.85)]
         _TPL_CACHE[template] = np.array([layout_desc(x) for x in T])
     TD = _TPL_CACHE[template]
@@ -580,7 +580,7 @@ BP_HUE, BP_SAT, BP_VAL, BP_FRAME = (225, 300), 0.30, (0.06, 0.90), 0.30
 
 
 def blue_purple(path, fps=SAMPLE_FPS, width=160):
-    """蓝紫帧占比与蓝紫段时间码。色相 225°–300°、饱和度 ≥0.30、亮度 0.06–0.90 的像素占一帧 ≥30% 算蓝紫帧。"""
+    """Blue-purple frame share and timecodes of blue-purple stretches. A frame where ≥30% of pixels have hue 225°–300°, saturation ≥0.30, value 0.06–0.90 counts as blue-purple."""
     w, h = probe(path)[:2]
     hh = max(2, int(round(h * width / w / 2)) * 2)
     raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vf", f"fps={fps},scale={width}:{hh}",
@@ -603,11 +603,11 @@ def blue_purple(path, fps=SAMPLE_FPS, width=160):
     return round(float(bad.mean()), 3), spans
 
 
-# ---------------------------------------------------------------- 打灯
-SHORT_S = float(os.environ.get("FILM_GATE_MIN_S", 20))  # 标定集都是 45 秒以上的成片；短于这个时长的片段读数噪声大，红灯降为黄灯只提示
+# ---------------------------------------------------------------- lights
+SHORT_S = float(os.environ.get("FILM_GATE_MIN_S", 20))  # the calibration set is all films of 45 seconds or more; readings of clips shorter than this are noisy, so red is downgraded to a yellow hint
 
 
-FACT_GATES = {"blank_run_s", "blue_purple_share"}   # 片长再短也照样红灯（配色不随片长变）
+FACT_GATES = {"blank_run_s", "blue_purple_share"}   # red however short the film (colors don't change with film length)
 
 
 def grade(res):
@@ -622,81 +622,81 @@ def grade(res):
         if lv == "red" and k == "blue_purple_share" and res.get("allow_blue_purple"):
             lv = "yellow"
         if lv == "red" and short and k not in FACT_GATES:
-            lv = "yellow"; res["short_clip_note"] = f"片长 {res.get('duration_s')}s，短于 {SHORT_S}s，快动门禁只提示不拦（空画面照样拦）；拼进成片后在成片上再跑一次"
+            lv = "yellow"; res["short_clip_note"] = f"Film length {res.get('duration_s')}s, shorter than {SHORT_S}s, so the fast-motion gate only warns and doesn't block (empty frames still block); run it again on the final film once joined"
         red |= lv == "red"
         rows.append((k, name, v, lv, gate, unit))
     return rows, red
 
 
-# ---------------------------------------------------------------- 读给人听
-FIX = ("按 references/镜头语言.md 在「观众这一刻该看哪」的地方补镜头内运动：要看清细节就缓推（0.6–1.5 秒，CAM.track 的 push），"
-       "在几件东西之间走就横移（glide），要看全貌就拉远（pull）；物自己的大动作（生长、翻页、倒水、录像里的动作）也算，实拍录像本身在动就停住。"
-       "快推、砸入是重音，只给揭晓、反转、关键数字。每镜匀速慢推几个百分点、淡入淡出、转场都不算数（转场再快也被排除在外）。"
-       "1 秒左右推近 20% 的缓推和 0.28 秒快推在这项上记分差不多，不用为了过门把推镜改快。"
-       "也别为了过门每镜塞一次推近：2026-10-12 那支片每 2 秒一推，被判「太多、太快、不 smooth」。")
+# ---------------------------------------------------------------- explained for people
+FIX = ("Following references/camera-language.md, add in-shot motion where \"the audience should be looking at this moment\": slow-push to see a detail clearly (0.6–1.5 seconds, CAM.track's push), "
+       "pan between several things (glide), pull out to see the whole (pull); the object's own big actions (growing, a page turning, pouring water, action in footage) count too, and when live footage moves on its own, hold. "
+       "Fast pushes and slams are accents, only for reveals, twists and key numbers. A constant slow push of a few percent on every shot, fades and transitions don't count (transitions are excluded however fast). "
+       "A slow push of about 20% over 1 second scores about the same here as a 0.28-second fast push, so there's no need to speed up pushes to pass the gate. "
+       "And don't stuff a push-in into every shot to pass the gate: the 2026-10-12 film pushed every 2 seconds and was judged \"too many, too fast, not smooth\".")
 
-BLANK_FIX = ("空画面这一段让主角或主物留在画里：要换气就让它停住、拉远，或者镜头从它身上横移到下一个物；"
-             "转场不要经过纯色底（黑场、纯色闪、渐变底）停留 0.3 秒以上。白板、黑底片只要画面上有笔画、线条、字，就不算空。")
-
-
-BP_FIX = ("换掉蓝紫底：片段 spec 写同一个 \"theme\"（references/色板.md 里的 paper、poster、ink、navy、bauhaus、snow、wood、chalk，"
-          "或按它的规则自定），scenes 也用这套色板；不画深紫星空、蓝紫渐变、霓虹青紫光。"
-          "题材本身就要蓝紫（用户点名的赛博朋克紫、梵高星月夜）才用 --allow-blue-purple \"理由\"，理由会写进交付说明。")
+BLANK_FIX = ("In the empty-frame stretch, keep the protagonist or main object in the picture: for a breather, let it hold, pull out, or pan from it to the next object; "
+             "transitions shouldn't pass through a solid background (black, solid-color flash, gradient background) for 0.3 seconds or more. Whiteboard and black-background films aren't empty as long as there are strokes, lines or text on screen.")
 
 
-# 只报告的黄灯项：一句「去看哪里」
+BP_FIX = ("Replace the blue-purple background: give every clip spec the same \"theme\" (paper, poster, ink, navy, bauhaus, snow, wood or chalk from references/palettes.md, "
+          "or define your own by its rules), and use that palette in scenes too; no deep-purple starry skies, blue-purple gradients or neon cyan-purple glows. "
+          "Only when the topic itself needs blue-purple (a cyberpunk purple the user asked for, Van Gogh's Starry Night) use --allow-blue-purple \"reason\"; the reason is written into the delivery notes.")
+
+
+# Report-only yellow items: one sentence on "where to look"
 LOOK = {
-    "fast_ratio_worst_window": lambda r: f"{r['worst_window_start_s']:.0f}–{r['worst_window_start_s'] + r['worst_window_len_s']:.0f}s 这段几乎没有快动作（前紧后松）",
-    "drift_ratio": lambda r: f"{r['drift_ratio']:.0%} 的帧在缓慢漂移",
-    "longest_still_s": lambda r: f"从 {r['longest_still_start_s']:.1f}s 起连续 {r['longest_still_s']:.1f}s 一动不动",
-    "event_rate": lambda r: f"平均每 10 秒只有 {r['event_rate']:.1f} 个视觉事件",
-    "max_event_gap_s": lambda r: f"最长 {r['max_event_gap_s']:.1f}s 没有任何切换或快动作",
-    "dead_bg": lambda r: f"扣掉相机运动后，平均 {r['dead_bg']:.0%} 的画面在镜头里一直不变",
-    "dead_flat": lambda r: f"{r['dead_flat']:.0%} 的画面是一直不变的空底",
-    "flat_light": lambda r: f"米底/白底空着的面积平均占 {r['flat_light']:.0%}（白板等浅底风格可以如此，确认是风格不是空着）",
-    "page_frame_share": lambda r: f"{r['page_frame_share']:.0%} 的时长被固定的页眉、页码、标题栏、logo 框着",
-    "slow_zoom_share": lambda r: f"{r['slow_zoom_share']:.0%} 的时长是匀速慢推/慢拉镜头",
-    "push_in_per_min": lambda r: (f"每分钟至少推近 {r['push_in_per_min']:g} 次（其中快推 {r['fast_push_per_min']:g} 次，推近占推拉 {r['push_in_share']:.0%}），"
-                                  f"一推一推的 zoom in 会显得急、不顺；用正常速度看一遍，推进去之后有没有拉远、横移还回来（references/镜头语言.md）"),
-    "dissolve_share": lambda r: f"转场里 {r['dissolve_share']:.0%} 是交叉淡化",
-    "template_sim_share": lambda r: f"{r['template_sim_share']:.0%} 的时长和示范片构图几乎一样",
+    "fast_ratio_worst_window": lambda r: f"{r['worst_window_start_s']:.0f}–{r['worst_window_start_s'] + r['worst_window_len_s']:.0f}s has almost no fast action (tight start, loose end)",
+    "drift_ratio": lambda r: f"{r['drift_ratio']:.0%} of frames are slowly drifting",
+    "longest_still_s": lambda r: f"completely still for {r['longest_still_s']:.1f}s from {r['longest_still_start_s']:.1f}s",
+    "event_rate": lambda r: f"only {r['event_rate']:.1f} visual events per 10 seconds on average",
+    "max_event_gap_s": lambda r: f"up to {r['max_event_gap_s']:.1f}s without any change or fast action",
+    "dead_bg": lambda r: f"after removing camera motion, on average {r['dead_bg']:.0%} of the picture never changes within a shot",
+    "dead_flat": lambda r: f"{r['dead_flat']:.0%} of the picture is an empty background that never changes",
+    "flat_light": lambda r: f"empty beige/white background takes {r['flat_light']:.0%} of the area on average (fine for light styles like whiteboard; confirm it's the style and not just empty)",
+    "page_frame_share": lambda r: f"{r['page_frame_share']:.0%} of the time is framed by a fixed header, page number, title bar or logo",
+    "slow_zoom_share": lambda r: f"{r['slow_zoom_share']:.0%} of the time is constant slow push / slow pull shots",
+    "push_in_per_min": lambda r: (f"at least {r['push_in_per_min']:g} push-ins per minute (of which {r['fast_push_per_min']:g} fast pushes; push-ins are {r['push_in_share']:.0%} of push/pulls); "
+                                  f"one zoom-in after another feels rushed and not smooth; watch it at normal speed and check whether you pull out or pan back after pushing in (references/camera-language.md)"),
+    "dissolve_share": lambda r: f"{r['dissolve_share']:.0%} of transitions are crossfades",
+    "template_sim_share": lambda r: f"{r['template_sim_share']:.0%} of the time looks almost the same as the demo film's composition",
 }
 
 
 def explain(res):
-    """一句话结论＋为什么＋怎么改＋黄灯项去看哪里。只用 res 里量出来的数。"""
+    """One-sentence verdict + why + how to fix + where to look for yellow items. Uses only numbers measured in res."""
     fr, lv = res["fast_ratio"], res["lights"]["fast_ratio"]
     if lv == "red":
-        head = ("整片没有一次镜头内的快速动作，读起来像翻页" if fr < 0.005 else
-                f"整片只有 {fr:.1%} 的帧在镜头内快速运动（红线 3.5%），读起来像翻页")
+        head = ("The whole film has not a single fast in-shot action; it reads like flipping pages" if fr < 0.005 else
+                f"Only {fr:.1%} of the film's frames have fast in-shot motion (red line 3.5%); it reads like flipping pages")
     elif lv == "yellow":
-        head = f"镜头内的快速动作偏少（{fr:.1%}，黄线 6%），离翻页感不远"
+        head = f"Fast in-shot action is on the low side ({fr:.1%}, yellow line 6%), not far from a page-flip feel"
     else:
-        head = f"镜头内有足够的快速动作（{fr:.1%}）"
+        head = f"There's enough fast in-shot action ({fr:.1%})"
     if res.get("short_clip_note"):
-        head += "。" + res["short_clip_note"]
+        head += ". " + res["short_clip_note"]
     blank_red = res["lights"].get("blank_run_s") == "red"
     if blank_red:
-        segs = "、".join(f"{a:.2f}–{b:.2f}s" for a, b in res["blank_runs_s"])
-        head = (f"中段有 {len(res['blank_runs_s'])} 段近乎纯色的空画面（{segs}），最长 {res['blank_run_s']:.2f}s，"
-                f"整帧几乎没有边缘或纹理、主体不在画里") + ("；另外" + head if lv != "green" else "")
+        segs = ", ".join(f"{a:.2f}–{b:.2f}s" for a, b in res["blank_runs_s"])
+        head = (f"{len(res['blank_runs_s'])} near-solid empty stretch(es) mid-film ({segs}), the longest {res['blank_run_s']:.2f}s, "
+                f"with almost no edges or texture in the frame and the subject out of the picture") + ("; also, " + head if lv != "green" else "")
     bp = res["lights"].get("blue_purple_share")
     if bp in ("red", "yellow") and not res.get("allow_blue_purple"):
-        segs = "、".join(f"{a:.1f}–{b:.1f}s" for a, b in res["blue_purple_spans_s"][:6])
-        msg = f"{res['blue_purple_share']:.0%} 的画面是蓝紫底（{segs}）"
-        head = (msg + "，这是最典型的 AI 配色" + ("；另外" + head if lv != "green" or blank_red else "")) if bp == "red" else head + "；" + msg
+        segs = ", ".join(f"{a:.1f}–{b:.1f}s" for a, b in res["blue_purple_spans_s"][:6])
+        msg = f"{res['blue_purple_share']:.0%} of the picture has a blue-purple background ({segs})"
+        head = (msg + ", the most typical AI color scheme" + ("; also, " + head if lv != "green" or blank_red else "")) if bp == "red" else head + "; " + msg
     elif res.get("allow_blue_purple") and res["blue_purple_share"] >= METRICS["blue_purple_share"][2]:
-        head += f"；蓝紫底占 {res['blue_purple_share']:.0%}，已声明题材需要：{res['allow_blue_purple']}"
+        head += f"; blue-purple background {res['blue_purple_share']:.0%}, declared as needed by the topic: {res['allow_blue_purple']}"
     why = []
     if lv != "green":
         if res["slow_zoom_share"] >= 0.3:
-            why.append(f"{res['slow_zoom_share']:.0%} 的时长在匀速慢推/慢拉")
+            why.append(f"{res['slow_zoom_share']:.0%} of the time is constant slow push / slow pull")
         if res["still_ratio"] >= 0.5:
-            why.append(f"{res['still_ratio']:.0%} 的帧完全停着")
+            why.append(f"{res['still_ratio']:.0%} of frames are completely still")
         elif res["drift_ratio"] >= 0.4:
-            why.append(f"{res['drift_ratio']:.0%} 的帧只是在缓慢漂移")
+            why.append(f"{res['drift_ratio']:.0%} of frames are just slowly drifting")
         if res["hard_cuts"] + res["dissolves"]:
-            why.append(f"画面变化主要靠转场（硬切 {res['hard_cuts']}、淡化 {res['dissolves']}），转场不算镜头内动作")
+            why.append(f"picture changes rely mainly on transitions (hard cuts {res['hard_cuts']}, fades {res['dissolves']}), and transitions don't count as in-shot action")
     look = [(k, LOOK[k](res)) for k, l in res["lights"].items() if l == "yellow" and k in LOOK]
     ww = None
     if res.get("worst_window_start_s") is not None:
@@ -707,8 +707,8 @@ def explain(res):
 
 
 def measure(path, sub_band=None, vertical="auto", template=DEFAULT_TEMPLATE, allow_blue_purple=None):
-    """量一支成片，返回带 lights / gate_light / verdict / explain 的结果。deliver.py 也调它。
-    allow_blue_purple：题材本身要蓝紫时的理由（非空字符串），蓝紫门禁降为黄灯，理由进结果。"""
+    """Measure one final film, returning results with lights / gate_light / verdict / explain. Also called by deliver.py.
+    allow_blue_purple: the reason (a non-empty string) when the topic itself needs blue-purple; the blue-purple gate downgrades to yellow and the reason goes into the results."""
     tpl = template if template and os.path.exists(template) else None
     cv2.setNumThreads(max(1, (os.cpu_count() or 2) // 2))
     res = analyze(path, sub_band=sub_band, vertical=vertical, template=tpl)
@@ -725,27 +725,27 @@ def measure(path, sub_band=None, vertical="auto", template=DEFAULT_TEMPLATE, all
     return res, rows
 
 
-LIGHT = {"red": "[红]", "yellow": "[黄]", "green": "[绿]", "--": "[  ]"}
+LIGHT = {"red": "[red]   ", "yellow": "[yellow]", "green": "[green] ", "--": "[      ]"}
 
 
 def report_lines(res, rows):
-    """文字报告（终端和交付说明共用）。"""
+    """Text report (shared by the terminal and the delivery notes)."""
     L = [f"{res['file']}  {res['orientation']}  {res['duration_s']}s  "
-         f"镜头 {res['shots']}（硬切 {res['hard_cuts']}，淡化 {res['dissolves']}）  平均镜长 {res['asl_s']}s"]
+         f"shots {res['shots']} (hard cuts {res['hard_cuts']}, fades {res['dissolves']})  average shot length {res['asl_s']}s"]
     for k, name, v, lv, gate, unit in rows:
         vs = "—" if v is None else (f"{v:.3f}" if isinstance(v, float) else str(v))
-        L.append(f"  {LIGHT[lv]} {'门禁' if gate else '报告'}  {name}：{vs}{unit}")
+        L.append(f"  {LIGHT[lv]} {'gate  ' if gate else 'report'}  {name}: {vs}{unit}")
     ex = res["explain"]
     if res.get("blank_runs_s"):
-        L.append("  空画面时间码：" + "、".join(f"{a:.2f}–{b:.2f}s" for a, b in res["blank_runs_s"]))
+        L.append("  Empty-frame timecodes: " + ", ".join(f"{a:.2f}–{b:.2f}s" for a, b in res["blank_runs_s"]))
     if res.get("blue_purple_spans_s") and res["lights"].get("blue_purple_share") != "green":
-        L.append("  蓝紫底时间码：" + "、".join(f"{a:.1f}–{b:.1f}s" for a, b in res["blue_purple_spans_s"]))
+        L.append("  Blue-purple background timecodes: " + ", ".join(f"{a:.1f}–{b:.1f}s" for a, b in res["blue_purple_spans_s"]))
     if res.get("allow_blue_purple"):
-        L.append(f"  已声明题材需要蓝紫：{res['allow_blue_purple']}")
+        L.append(f"  Declared as needing blue-purple by the topic: {res['allow_blue_purple']}")
     if ex["worst_window"]:
         w = ex["worst_window"]
-        L.append(f"  最差 {w['end_s'] - w['start_s']:.0f} 秒窗口：{w['start_s']:.0f}–{w['end_s']:.0f}s，快动帧占比 {w['fast_ratio']}；"
-                 f"每 10 秒快动帧占比：{res['fast_ratio_by_10s']}")
+        L.append(f"  Worst {w['end_s'] - w['start_s']:.0f}-second window: {w['start_s']:.0f}–{w['end_s']:.0f}s, fast-motion ratio {w['fast_ratio']}; "
+                 f"fast-motion ratio per 10 seconds: {res['fast_ratio_by_10s']}")
     return L
 
 
@@ -754,37 +754,37 @@ def main():
     ap.add_argument("mp4")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--vertical", default="auto", choices=["auto", "yes", "no"],
-                    help="横竖屏；auto 按宽高判断。只影响字幕带默认值")
+                    help="landscape or portrait; auto decides by width and height. Only affects the default subtitle band")
     ap.add_argument("--sub-band", type=float, default=None,
-                    help="屏蔽底部字幕带的比例；默认横屏 0.15、竖屏 0.18；0 表示不屏蔽")
-    ap.add_argument("--template", default=DEFAULT_TEMPLATE, help="示范片（取前 12 秒比构图）")
+                    help="fraction of the bottom subtitle band to mask; default 0.15 landscape, 0.18 portrait; 0 means no masking")
+    ap.add_argument("--template", default=DEFAULT_TEMPLATE, help="demo film (the first 12 seconds are used to compare composition)")
     ap.add_argument("--no-template", action="store_true")
-    ap.add_argument("--allow-blue-purple", metavar="理由", default=None,
-                    help="题材本身要蓝紫（用户点名的赛博朋克紫、梵高星月夜）时写理由，蓝紫门禁降为黄灯")
+    ap.add_argument("--allow-blue-purple", metavar="REASON", default=None,
+                    help="give a reason when the topic itself needs blue-purple (a cyberpunk purple the user asked for, Van Gogh's Starry Night); the blue-purple gate downgrades to yellow")
     a = ap.parse_args()
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-        print("需要 ffmpeg/ffprobe", file=sys.stderr); sys.exit(1)
+        print("ffmpeg/ffprobe required", file=sys.stderr); sys.exit(1)
     try:
         res, rows = measure(a.mp4, sub_band=a.sub_band, vertical=a.vertical, template=None if a.no_template else a.template,
                             allow_blue_purple=a.allow_blue_purple)
     except (subprocess.CalledProcessError, KeyError, IndexError, RuntimeError, ValueError) as e:
-        print(f"读不了这支片：{a.mp4}（{e}）", file=sys.stderr); sys.exit(1)
+        print(f"Can't read this film: {a.mp4} ({e})", file=sys.stderr); sys.exit(1)
     red = res["verdict"] == "red"
     if a.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
     else:
         print("\n".join(report_lines(res, rows)))
         ex = res["explain"]
-        tag = {"red": "红灯，不出片", "yellow": "黄灯，可以交付但要人看", "green": "门禁通过"}[res["gate_light"]]
-        print(f"结论：{tag}——{ex['summary']}。" + ("".join(f"{w}；" for w in ex["why"]).rstrip("；") + "。" if ex["why"] else ""))
+        tag = {"red": "red light, no film delivered", "yellow": "yellow light, deliverable but needs a human look", "green": "gate passed"}[res["gate_light"]]
+        print(f"Verdict: {tag} — {ex['summary']}." + (" " + "; ".join(ex["why"]) + "." if ex["why"] else ""))
         if ex["fix"]:
-            print("怎么改：" + ex["fix"])
+            print("How to fix: " + ex["fix"])
         if ex["look"]:
-            print("黄灯项（只报告，不拦；去看这一段，交付说明里逐条说清为什么可以这样）：")
+            print("Yellow items (report only, not blocking; go look at these stretches and explain each in the delivery notes):")
             for _, t in ex["look"]:
                 print("  - " + t)
         if not red:
-            print("提醒：门禁只拦「整片几乎没有快动作」「中段空画面」「蓝紫底」三种硬伤；独立审片仍然要做。")
+            print("Reminder: the gate only blocks three defects: \"almost no fast action in the whole film\", \"empty frames mid-film\" and \"blue-purple backgrounds\"; the independent review still has to be done.")
     sys.exit(2 if red else 0)
 
 

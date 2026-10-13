@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""绿幕抠图＋按列空隙切成单个姿势：python3 key_split.py 图.png --out 前缀 [--pick 0]（只要第几个）"""
+"""Green-screen keying + splitting into individual poses by column gaps: python3 key_split.py sheet.png --out prefix [--pick 0] (only the Nth)"""
 import argparse
 import numpy as np
 from PIL import Image
-ap = argparse.ArgumentParser(); ap.add_argument('src'); ap.add_argument('--out', required=True); ap.add_argument('--pick', type=int); ap.add_argument('--white', action='store_true', help='白底线稿：不抠，只裁')
+ap = argparse.ArgumentParser(); ap.add_argument('src'); ap.add_argument('--out', required=True); ap.add_argument('--pick', type=int); ap.add_argument('--white', action='store_true', help='white-background line art: crop only, no keying')
 a = ap.parse_args()
 im = np.asarray(Image.open(a.src).convert('RGB')).astype(np.float32); r, g, b = im[..., 0], im[..., 1], im[..., 2]
 if a.white:

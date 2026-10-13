@@ -5,7 +5,7 @@
 # Python
 __pycache__/
 
-# 渲染与合成产物（可重新生成）
+# Render and compositing outputs (can be regenerated)
 *.mp4
 *.mov
 *.wav

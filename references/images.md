@@ -1,32 +1,32 @@
-# 可选图片：已有素材与当前Agent生图
+# Optional images: existing assets and the current agent's image generation
 
-图片接入分两段：Agent观察当前工具、按用户授权调用；脚本解析选择、检查产物并保存到项目。脚本不模拟宿主工具、不借用其他Agent登录态，也不自动切换图片API。
+Image integration has two halves: the agent observes the current tools and calls them per the user's authorization; the script resolves the choice, checks the output and saves it to the project. The script doesn't simulate host tools, doesn't borrow other agents' logins, and doesn't switch image APIs automatically.
 
-## 先看任务，再看配置
+## Look at the task first, then the configuration
 
-已有图片直接用`use-image`导入。无须图片的代码动画跳过本页。新生图先读本次已加载规则中的明确偏好，再读本工具配置；用户已经要求生成时，按实际工具和既有授权执行，不再为填配置强行问一遍。
+Import existing images directly with `use-image`. Code animations that need no images skip this page. For new image generation, first read explicit preferences in the rules loaded this time, then this tool's configuration; when the user has already asked for generation, proceed with the actual tools and existing authorization, without forcing a question just to fill in configuration.
 
 ```sh
-# S为本次实际加载的skill目录
+# S is the skill directory actually loaded this time
 python "$S/scripts/capabilities.py" image-status
-python "$S/scripts/capabilities.py" use-image --file 原图.png --out <项目>/配图/素材.png
+python "$S/scripts/capabilities.py" use-image --file original.png --out <project>/images/asset.png
 ```
 
-`preferences.image.mode`支持`unconfigured/off/existing/generate`，provider是当前工具的准确ID或auto。`off`是默认不生成的偏好，本次明确生成可覆盖；`policy.image_generation=deny`是禁止项，临时授权flags不能覆盖。将用户明确的「禁止」保存为policy，不只保存为mode。
+`preferences.image.mode` supports `unconfigured/off/existing/generate`, and provider is the current tool's exact ID or auto. `off` is a preference not to generate by default, which an explicit request for generation this time can override; `policy.image_generation=deny` is a prohibition that temporary authorization flags can't override. Save the user's explicit "forbid" as a policy, not just as a mode.
 
-首次缺配置时，只询问现有素材/允许当前工具生成/跳过。`skip --capability image --scope task`不落盘，`--scope user`表示长期手动启用。用户仅选择这次时不存成长期默认。既有语音配置升级后继续有效，新增图片能力保持未选择，不自动获准。
+When configuration is missing the first time, ask only: existing assets / allow the current tool to generate / skip. `skip --capability image --scope task` isn't saved; `--scope user` means enable manually long-term. When the user chooses only for this time, don't save it as a long-term default. Existing voice configuration stays valid after upgrade; the new image capability stays unchosen and isn't authorized automatically.
 
-## 当前工具快照
+## Snapshot of the current tools
 
-Agent从当前会话已经暴露的工具清单（或宿主正式工具搜索）读取名称和schema，确认支持的操作，再写一份任务内快照。不能通过扫描Key、已安装skill或Agent名称推断。没有工具就写`tools: []`。
+The agent reads names and schemas from the tool list the current session already exposes (or the host's official tool search), confirms supported operations, then writes a snapshot within the task. It can't be inferred by scanning keys, installed skills or agent names. With no tools, write `tools: []`.
 
 ```json
 {
   "host": "codex",
-  "session_id": "本次任务唯一标识",
+  "session_id": "unique ID for this task",
   "observed_at": 0,
   "tools": [{
-    "id": "当前实际工具ID",
+    "id": "the actual current tool ID",
     "kind": "host",
     "operations": ["generate", "edit"],
     "reference_images": true,
@@ -37,17 +37,17 @@ Agent从当前会话已经暴露的工具清单（或宿主正式工具搜索）
 }
 ```
 
-示例不是能力声明：`observed_at`必须填写本次Unix时间，工具特性和ID必须来自本次实际schema；快照15分钟有效。host可为codex、claude-code、kimi、other，kind可为host或mcp。计费类型为subscription/paid_api/unknown/none；网络为cloud/local。订阅不代表无额度限制；不清楚计费时用unknown，不能填none。
+The example isn't a capability declaration: `observed_at` must be filled with the Unix time of this session, and tool features and IDs must come from this session's actual schema; a snapshot is valid for 15 minutes. host may be codex, claude-code, kimi or other; kind may be host or mcp. Cost type is subscription/paid_api/unknown/none; network is cloud/local. A subscription doesn't mean unlimited quota; when cost is unclear use unknown, never none.
 
-三家宿主均走这份通用契约。某个Codex会话有image_gen，不代表所有Codex产品表面都有；Claude Code/Kimi若暴露合适MCP图片工具也可使用，若没有就导入现有图片或给出待制作素材说明。不得虚构这两家内置同名工具。
+All three hosts go through this common contract. One Codex session having image_gen doesn't mean every Codex product surface has it; Claude Code/Kimi may use a suitable MCP image tool if one is exposed, and if not, import existing images or give a description of the assets still to be made. Never invent built-in tools of the same name for those two.
 
-## 计划→宿主执行→验收
+## Plan → host executes → acceptance
 
-需求JSON：
+Request JSON:
 
 ```json
 {
-  "prompt": "用户确认的图片描述",
+  "prompt": "the image description the user confirmed",
   "operation": "generate",
   "references": [],
   "transparent_background": true,
@@ -56,42 +56,42 @@ Agent从当前会话已经暴露的工具清单（或宿主正式工具搜索）
 }
 ```
 
-改图用edit并提供参考文件；相对路径相对需求JSON。脚本验证参考图可解码并保存hash，之后变动会使旧计划失效。
+For editing, use edit and provide reference files; relative paths are relative to the request JSON. The script verifies reference images decode and saves their hashes, and later changes invalidate the old plan.
 
 ```sh
-python "$S/scripts/capabilities.py" image-plan --request 需求.json \
-  --host-tools 当前工具.json --session 本次标识 --mode generate \
-  --allow-image-generation --allow-cloud --out 执行计划.json
+python "$S/scripts/capabilities.py" image-plan --request request.json \
+  --host-tools current_tools.json --session this-session-id --mode generate \
+  --allow-image-generation --allow-cloud --out execution_plan.json
 ```
 
-授权flags只表达用户已经给出的本次授权。云端参考图上传另需`--allow-reference-upload`；明确付费API需`--allow-paid-api`；未知计费需`--allow-unknown-image-cost`。长期允许可存入相应policy字段。项目只能设置deny，不能授予这些权利。禁止项先处理，多个已允许工具仍无法明确选择时返回needs_selection，不擅自猜平台。
+Authorization flags only express authorization the user has already given for this time. Uploading reference images to the cloud additionally needs `--allow-reference-upload`; an explicitly paid API needs `--allow-paid-api`; unknown cost needs `--allow-unknown-image-cost`. Long-term permission can be stored in the corresponding policy fields. A project can only set deny, never grant these rights. Prohibitions are handled first; when several allowed tools remain and none can be chosen clearly, it returns needs_selection rather than guessing a platform.
 
-拿到`host_action_required`后，Agent按该工具的真实schema调用；计划是语义要求，不是跨平台通用参数体。生成成功才写回执：
+After getting `host_action_required`, the agent calls the tool with its real schema; the plan is a semantic requirement, not a cross-platform universal parameter body. Write the receipt only when generation succeeds:
 
 ```json
 {
   "status": "success",
-  "plan_id": "执行计划中的ID",
-  "session_id": "本次标识",
-  "tool_id": "实际调用工具ID",
-  "output_sha256": "实际输出文件SHA256"
+  "plan_id": "the ID in the execution plan",
+  "session_id": "this session's ID",
+  "tool_id": "the ID of the tool actually called",
+  "output_sha256": "SHA256 of the actual output file"
 }
 ```
 
-保留实际工具调用记录作依据。回执是Agent提供的调用记录，不是平台签名认证；只读PNG元数据不能证明由哪个模型生成。
+Keep the actual tool-call record as the basis. The receipt is a call record provided by the agent, not a platform-signed authentication; reading PNG metadata alone can't prove which model generated it.
 
 ```sh
-python "$S/scripts/capabilities.py" accept-image --plan 执行计划.json --receipt 回执.json \
-  --host-tools 当前工具.json --session 本次标识 --file 宿主输出.png \
-  --out <项目>/配图/正式素材.png --allow-image-generation --allow-cloud
+python "$S/scripts/capabilities.py" accept-image --plan execution_plan.json --receipt receipt.json \
+  --host-tools current_tools.json --session this-session-id --file host_output.png \
+  --out <project>/images/final_asset.png --allow-image-generation --allow-cloud
 ```
 
-验收重新核对当前授权、图片相关配置、工具、会话、参考图、文件hash、实际尺寸和透明像素。计划1小时有效；能力快照过期时先刷新，不能改旧计划假装仍有效。原图/旁车有任一存在时不覆盖；支持静态PNG/JPEG/WebP，需Pillow，工具不会自动安装。图片内容与参考身份仍要视觉核对，hash/尺寸不能代替看图。
+Acceptance rechecks the current authorization, image-related configuration, tools, session, reference images, file hash, actual dimensions and transparent pixels. A plan is valid for 1 hour; when the capability snapshot expires, refresh it first — you can't edit an old plan to pretend it's still valid. If either the original image or its sidecar exists, nothing is overwritten; static PNG/JPEG/WebP are supported and Pillow is required, which the tool doesn't install automatically. Image content and the reference identity still need a visual check; hash/dimensions can't replace looking at the image.
 
-通过后复制进项目并写相邻JSON，包含尺寸、透明性、SHA、工具ID、计划关联和`provenance: agent_reported_tool_call`。不要引用Agent缓存作为项目最终素材，也不要宣称已核实服务端未返回的模型名。
+Once passed, it's copied into the project with an adjacent JSON containing dimensions, transparency, SHA, tool ID, plan association and `provenance: agent_reported_tool_call`. Don't reference the agent's cache as the project's final asset, and don't claim to have verified a model name the server didn't return.
 
-## 扩展与回流
+## Extension and feedback
 
-添加图片API适配器时先选定真实供应商，再实现其鉴权、请求、输出和错误协议，并写成功/失败契约测试。一个自称OpenAI-compatible的URL不自动成为可用后端；本版没有通用API执行器或自安装器。现有MCP工具属于当前Agent工具通道，照其schema执行。
+When adding an image API adapter, first choose a real provider, then implement its authentication, request, output and error protocols, and write success/failure contract tests. A URL that calls itself OpenAI-compatible doesn't automatically become a usable backend; this version has no generic API executor or self-installer. Existing MCP tools belong to the current agent's tool channel; execute them per their schema.
 
-2026-10-08：P2建立选择→宿主动作→素材验收的接口。复用前读本页和供应商当前工具说明；遇到可重复失败补测试并修原逻辑，个人喜好只写私人配置。语音和图片各自启用，升级不会扩大已有授权。确定性验收与视觉质量结论分开记录。
+2026-10-08: P2 established the interface of selection → host action → asset acceptance. Before reuse, read this page and the provider's current tool documentation; for reproducible failures add a test and fix the original logic, and write personal preferences only into private configuration. Voice and images are enabled separately, and upgrades never widen existing authorization. Deterministic acceptance and conclusions about visual quality are recorded separately.

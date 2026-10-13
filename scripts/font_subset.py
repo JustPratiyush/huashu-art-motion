@@ -2,24 +2,24 @@
 # /// script
 # dependencies = ["fonttools"]
 # ///
-"""从一个中文字体里抽子集，写成 woff 放进 engine/lib/fonts/。缺字形会静默回退系统字体（换台机器就变样），
-所以画面里要用的中文字必须真的在子集里——引擎启动时 U.assertGlyphs 会查角标的字，缺了 console.error，qa 失败。
+"""Extract a subset from a CJK font and write it as woff into engine/lib/fonts/. Missing glyphs silently fall back to system fonts (which look different on another machine),
+so CJK characters used in the picture must really be in the subset — at engine startup U.assertGlyphs checks the corner-badge characters, and missing ones console.error and fail qa.
 
-    uv run scripts/font_subset.py                         # 重建预置的霞鹜文楷子集（扫 engine/ 下全部 .js 里的中文＋内置常用字）
-    uv run scripts/font_subset.py --scan <代码工程目录>     # 把另一个工程里用到的中文也并进来
-    uv run scripts/font_subset.py --text "皮影戏蓝色时期"   # 追加指定文字
-    uv run scripts/font_subset.py --font path/to/XXX.ttf --out <工程>/lib/fonts/XXX-400.woff --text "..."   # 别的字体
-    uv run scripts/font_subset.py --gb2312 ...           # 再并进 GB2312 全部 6763 个汉字（解说片换题目不用每次补字；单字重约 1MB）
-    uv run scripts/font_subset.py --fix-widths engine/lib/fonts/PuHui-Medium.woff   # 只修字宽为 0 的全角空格（普惠体 Medium/Bold 源字体的 bug）
+    uv run scripts/font_subset.py                         # rebuild the preset LXGW WenKai subset (scans CJK in all .js under engine/ + built-in common characters)
+    uv run scripts/font_subset.py --scan <engine project dir>  # also merge in the CJK used in another project
+    uv run scripts/font_subset.py --text "<extra characters>"   # append specific characters
+    uv run scripts/font_subset.py --font path/to/XXX.ttf --out <project>/lib/fonts/XXX-400.woff --text "..."   # another font
+    uv run scripts/font_subset.py --gb2312 ...           # also merge all 6763 GB2312 characters (explainer films don't need characters added for every new topic; about 1MB per weight)
+    uv run scripts/font_subset.py --fix-widths engine/lib/fonts/PuHui-Medium.woff   # only fix the zero-width full-width space (a bug in the PuHui Medium/Bold source fonts)
 
-预置的解说片字体（YouTube 语法示范与新片都用，见 references/09）就是这么做的（开源版的中文黑体换成了思源黑体，--font 指向 Noto Sans SC 按字重实例化后的 ttf；普惠体许可不允许转换后再分发，只能自己本地生成）：
-    uv run scripts/font_subset.py --gb2312                                                     # 霞鹜文楷（白板）
-    for w in 65-Medium:Medium 85-Bold:Bold 105-Heavy:Heavy 115-Black:Black; do                # 阿里巴巴普惠体 3.0 四个字重
+The preset explainer fonts (used by the YouTube grammar demos and new films, see references/09) were made like this (the open-source version replaced the CJK sans with Source Han Sans, with --font pointing at Noto Sans SC ttfs instantiated per weight; PuHui's license doesn't allow redistribution after conversion, so it can only be generated locally):
+    uv run scripts/font_subset.py --gb2312                                                     # LXGW WenKai (whiteboard)
+    for w in 65-Medium:Medium 85-Bold:Bold 105-Heavy:Heavy 115-Black:Black; do                # the four weights of Alibaba PuHuiTi 3.0
       uv run scripts/font_subset.py --gb2312 --font path/to/AlibabaPuHuiTi-3-${w%%:*}.ttf --out scripts/engine/lib/fonts/PuHui-${w##*:}.woff; done
 
-默认字体：霞鹜文楷 Medium（LXGW WenKai，SIL Open Font License 1.1，可商用、可再分发、可嵌入），
-没有源文件就从 https://github.com/lxgw/LxgwWenKai/releases 下 LXGWWenKai-Medium.ttf，用 --font 指过去。
-新字体加进 engine/lib/fonts.js 才会注册（family 名 = 文件名去扩展名）。
+Default font: LXGW WenKai Medium (SIL Open Font License 1.1, commercial use, redistribution and embedding allowed);
+if you don't have the source file, download LXGWWenKai-Medium.ttf from https://github.com/lxgw/LxgwWenKai/releases and point --font at it.
+New fonts are registered only once added to engine/lib/fonts.js (family name = filename without extension).
 """
 import argparse, re, sys
 from pathlib import Path
@@ -28,7 +28,7 @@ from fontTools.ttLib import TTFont
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE / 'engine'
-# 预置字：数字、标点、年代/朝代、常见风格与画种用字。子集保持小（几十 KB），用到新字再跑一次本脚本。
+# Preset characters (glyph data, kept as CJK on purpose): digits, punctuation, eras/dynasties, common style and medium names. The subset stays small (tens of KB); run this script again when new characters are used.
 BASE = ('0123456789０１２３４５６７８９ ，。、：；！？「」『』《》（）·—…～'
         '年代世纪公元前后约初中晚期朝唐宋元明清汉魏晋隋周秦商夏民国现当今古'
         '水墨写意工笔山水花鸟人物画法风格派主义时期艺术家作品壁窟敦煌莫高佛飞天供养'
@@ -41,12 +41,12 @@ BASE = ('0123456789０１２３４５６７８９ ，。、：；！？「」『
         '蒸汽波像素光追橡皮管一二三四五六七八九十百千万')
 
 
-# 解说片常用的全角标点与符号
+# Full-width punctuation and symbols common in explainer films
 PUNCT = '，。、：；！？「」『』《》（）【】·—–…～“”‘’％＋－×÷→←↑↓▲▼≈±°¥€①②③④⑤⑥⑦⑧⑨⑩✓'
 
 
 def gb2312_l1():
-    """GB2312 全部 6763 个汉字（一级 3755 常用字＋二级 3008 次常用字，如「渲」「浏」）"""
+    """All 6763 GB2312 characters (3755 level-1 common characters + 3008 level-2 less common characters)"""
     out = set()
     for hi in range(0xB0, 0xF8):
         for lo in range(0xA1, 0xFF):
@@ -63,7 +63,7 @@ STR = re.compile(r"'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`"
 
 
 def scan(d):
-    """只收 JS 字符串字面量里的中文（注释里的中文不会画到画面上，算进来子集会胖 20 倍）"""
+    """Collect only CJK inside JS string literals (CJK in comments is never drawn on screen; counting it would make the subset 20× bigger)"""
     out = set()
     for f in Path(d).rglob('*.js'):
         try: src = f.read_text(encoding='utf-8')
@@ -74,8 +74,8 @@ def scan(d):
 
 
 def fix_blank_widths(font):
-    """全角空格 U+3000 在阿里巴巴普惠体 3.0 的 Medium／Bold 源字体里字宽是 0（Heavy／Black 正常 984/990），
-    「月收盘价，美元　纵轴未从 0 开始」会粘成一串。把它设成和「一」同宽。返回修了几个。"""
+    """The full-width space U+3000 has zero width in the Medium/Bold source fonts of Alibaba PuHuiTi 3.0 (Heavy/Black are fine at 984/990),
+    so text like "USD<U+3000>y-axis does not start at 0" runs together. Set it to the same width as the CJK character for "one". Returns how many were fixed."""
     cmap, hm, n = font.getBestCmap(), font['hmtx'], 0
     ref = cmap.get(0x4E00)
     for cp in (0x3000,):
@@ -89,33 +89,33 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--font', default=str(Path.home() / 'Library/Fonts/LXGWWenKai-Medium.ttf'))
     ap.add_argument('--out', default=str(ENGINE / 'lib/fonts/LXGWWenKai-500.woff'))
-    ap.add_argument('--scan', action='append', default=[], help='额外扫描的目录（可多次）')
-    ap.add_argument('--text', default='', help='额外要的字')
-    ap.add_argument('--no-default-scan', action='store_true', help='不扫 skill 自己的 engine/')
-    ap.add_argument('--gb2312', action='store_true', help='并进 GB2312 全部汉字（6763 个）')
-    ap.add_argument('--fix-widths', nargs='+', metavar='WOFF', help='不抽子集，只修已有字体文件里字宽为 0 的全角空格')
+    ap.add_argument('--scan', action='append', default=[], help='extra directories to scan (repeatable)')
+    ap.add_argument('--text', default='', help='extra characters to include')
+    ap.add_argument('--no-default-scan', action='store_true', help="don't scan the skill's own engine/")
+    ap.add_argument('--gb2312', action='store_true', help='merge in all GB2312 characters (6763)')
+    ap.add_argument('--fix-widths', nargs='+', metavar='WOFF', help="don't subset; only fix zero-width full-width spaces in existing font files")
     a = ap.parse_args()
     if a.fix_widths:
         for f in a.fix_widths:
             ft = TTFont(f); n = fix_blank_widths(ft); ft.flavor = 'woff'
             if n: ft.save(f)
-            print(f'{f}：修了 {n} 个字宽')
+            print(f'{f}: fixed {n} widths')
         return
-    if not Path(a.font).exists(): sys.exit(f'找不到字体 {a.font}（见脚本说明的下载地址）')
+    if not Path(a.font).exists(): sys.exit(f'Font not found: {a.font} (see the download link in the script notes)')
     chars = set(BASE) | set(a.text)
     if not a.no_default_scan: chars |= scan(ENGINE)
     for d in a.scan: chars |= scan(d)
-    chars |= set(chr(c) for c in range(0x20, 0x7F))           # ASCII 全带上（年份、英文副标题）
+    chars |= set(chr(c) for c in range(0x20, 0x7F))           # include all of ASCII (years, English subtitles)
     if a.gb2312: chars |= gb2312_l1() | set(PUNCT)
     font = TTFont(a.font)
     cmap = font.getBestCmap()
     miss = sorted(ch for ch in chars if ord(ch) not in cmap and not ch.isspace())
     opts = subset.Options(); opts.flavor = 'woff'; opts.layout_features = ['*']; opts.name_IDs = ['*']; opts.notdef_outline = True
     sub = subset.Subsetter(opts); sub.populate(text=''.join(sorted(chars))); sub.subset(font)
-    if fix_blank_widths(font): print('源字体全角空格字宽为 0，已设成和「一」同宽')
+    if fix_blank_widths(font): print('The source font\'s full-width space had zero width; set to the width of the CJK character for "one"')
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     font.flavor = 'woff'; font.save(a.out)
-    print(f'{a.out}  {len(chars)} 字  {Path(a.out).stat().st_size // 1024} KB' + (f'\n源字体里也没有：{"".join(miss)}' if miss else ''))
+    print(f'{a.out}  {len(chars)} characters  {Path(a.out).stat().st_size // 1024} KB' + (f'\nAlso missing from the source font: {"".join(miss)}' if miss else ''))
 
 
 if __name__ == '__main__':

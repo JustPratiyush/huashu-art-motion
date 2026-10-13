@@ -1,39 +1,39 @@
-# 维护与扩展
+# Maintenance and extension
 
-公共代码、公共推荐放在包内；个人平台、声音和凭证引用保存在安装目录外。不要把个人经验变成所有人的默认授权。
+Public code and public recommendations live in the package; personal platforms, voices and credential references are stored outside the install directory. Don't turn personal experience into default authorization for everyone.
 
-## 本地检查
+## Local checks
 
 ```sh
 python -m pip install requests Pillow
-# 另需系统安装ffmpeg/ffprobe；不会在正常Skill激活时自动安装
+# ffmpeg/ffprobe must also be installed on the system; they are not installed automatically when the skill is activated
 python -m unittest discover -s tests -v
 ```
 
-单元测试不调用真实语音/生图服务。真实宿主验收见[兼容性记录](references/compatibility.md)。新增适配器必须明确：配置、探查、请求与输出契约、失败行为；不能仅替换base_url就宣称兼容另一平台。
+Unit tests don't call real voice / image-generation services. Real host acceptance is in the [compatibility notes](references/compatibility.md). A new adapter must state clearly: configuration, probing, request and output contracts, and failure behavior; you can't claim compatibility with another platform just by swapping base_url.
 
-## 图片工具桥接
+## Image tool bridging
 
-读取[图片指南](references/images.md)。宿主提供实际工具声明，Agent执行调用，CLI生成计划并验收产物。回执不是平台签名来源认证。已有图片、禁用生成、无工具、未知计费、参考图权限和生成失败都需要覆盖。
+Read the [image guide](references/images.md). The host provides the actual tool declarations, the agent makes the calls, and the CLI generates the plan and accepts the output. A receipt is not platform-signed proof of origin. Existing images, generation disabled, no tools, unknown billing, reference-image permissions and generation failures all need coverage.
 
-独立图片API执行器仍是可选扩展，本版不自动安装、不注册账号、不借用其他Agent的登录态。
+A standalone image API executor remains an optional extension; this version doesn't install anything automatically, register accounts, or borrow other agents' logins.
 
-## 更新时保留用户配置
+## Keeping user configuration across updates
 
-安装目录允许被替换；用户media.json不得写入其中。旧配置通过默认值合并获得新字段，新增能力默认未选择/未授权，不自动重训或重置已有音色。改变字段语义时提供显式迁移与回滚方法。
+The install directory may be replaced; a user's media.json must never be written into it. Old configuration gains new fields by merging with defaults; new capabilities default to unchosen/unauthorized, and existing voices are never automatically retrained or reset. When a field's meaning changes, provide an explicit migration and rollback method.
 
-## 发布检查
+## Release checks
 
-审查变更后将本次公共文件暂存，再生成文件清单：
+After reviewing changes, stage this release's public files, then generate the file manifest:
 
 ```sh
 python scripts/check_release.py manifest --repo .
 git add release-manifest.json
 python scripts/check_release.py check --repo . --ref INDEX
-# 提交后核对全部待发提交，base替换为实际远端基线
+# After committing, check all outgoing commits, replacing base with the actual remote baseline
 python scripts/check_release.py check --repo . --ref HEAD --base origin/main
 ```
 
-检查Git对象而非仅磁盘文件；中间提交曾写入后又删除的凭证也会被检查。清单只证明受审文件集合一致，不替代代码审查、真实媒体验收和许可证核对。禁止绕过检查或重建历史去伪装成首次发布。
+It checks Git objects, not just files on disk; credentials written in an intermediate commit and then deleted are checked too. The manifest only proves the set of reviewed files is consistent; it doesn't replace code review, real media acceptance or license checks. Never bypass the check or rewrite history to disguise something as a first release.
 
-复用代码时也请保留原有字体、笔顺数据和角色示范的许可边界。个人反馈留个人配置；有复现证据的方法和接口经验才进入公共文档，并标注日期、范围和验证状态。
+When reusing code, also keep the existing license boundaries of the fonts, stroke-order data and character demos. Personal feedback stays in personal configuration; only methods and interface experience with reproducible evidence go into public docs, marked with date, scope and validation status.

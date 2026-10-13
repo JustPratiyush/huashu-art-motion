@@ -6,9 +6,9 @@
   "height": 1080,
   "theme": "poster",
   "cues": [
-    { "at": 0.7, "kind": "number", "text": "一句话换来的代码", "data": { "value": 3000, "suffix": " 行" } },
-    { "at": 2.6, "kind": "point", "text": "补全", "sub": "以前它补一行", "data": { "label": "从前", "key": "一行" } },
-    { "at": 4.3, "kind": "point", "text": "代理", "sub": "现在它做完整件事", "data": { "label": "现在", "key": "整件事" } },
-    { "at": 5.6, "kind": "highlight", "data": { "word": "代理" } }
+    { "at": 0.7, "kind": "number", "text": "Code from one sentence", "data": { "value": 3000, "suffix": " lines" } },
+    { "at": 2.6, "kind": "point", "text": "Autocomplete", "sub": "It used to fill in one line", "data": { "label": "Then", "key": "one line" } },
+    { "at": 4.3, "kind": "point", "text": "Agent", "sub": "Now it does the whole job", "data": { "label": "Now", "key": "the whole job" } },
+    { "at": 5.6, "kind": "highlight", "data": { "word": "Agent" } }
   ]
 }

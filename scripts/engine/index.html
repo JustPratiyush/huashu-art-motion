@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Art History Speedrun · 复刻</title>
+<html><head><meta charset="utf-8"><title>Art History Speedrun · recreation</title>
 <style>
 html,body{margin:0;background:#111;overflow:hidden}
 canvas{display:block;width:100vw;height:auto;max-width:1920px}
@@ -18,7 +18,7 @@ body.render #ui{display:none}
 <script src="lib/rig.js"></script>
 <script src="lib/rig_huashu.js"></script>
 <script src="lib/kit.js"></script>
-<!-- YouTube 解说语法库（references/09）：动效时间、相机、图解形变、文字、图表、发布会界面、拼贴、卡通 -->
+<!-- YouTube explainer grammar libraries (references/09): motion timing, camera, diagram morphs, text, charts, keynote UI, collage, cartoons -->
 <script src="lib/motion.js"></script>
 <script src="lib/camera.js"></script>
 <script src="lib/diagram.js"></script>
@@ -29,8 +29,8 @@ body.render #ui{display:none}
 <script src="lib/media.js"></script>
 <script src="lib/toon.js"></script>
 <script>
-// 选片子：默认 eras.js；?film=<名> → eras_<名>.js（如 ?film=gallery = 35 种风格样片）；?film=demos/<名> → demos/<名>/eras.js（8 种 YouTube 语法示范）。
-// render.py / qa.py 用 --film 传。
+// Choose the film: eras.js by default; ?film=<name> → eras_<name>.js (e.g., ?film=gallery = the 35-style sample film); ?film=demos/<name> → demos/<name>/eras.js (the 8 YouTube grammar demos).
+// render.py / qa.py pass it with --film.
 (() => { const f = new URLSearchParams(location.search).get('film');
   const src = f && /^demos\/[a-z0-9_]+$/.test(f) ? `${f}/eras.js` : f && /^[a-z0-9_]+$/.test(f) ? `eras_${f}.js` : 'eras.js';
   document.write(`<script src="${src}"><\/script>`); })();

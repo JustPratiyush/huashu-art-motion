@@ -1,5 +1,5 @@
-// SpaceX 这 24 年 · 段落表。段长来自 spacex/timing.js（按口播实测生成，勿手改）；
-// 每段的进入转场由该段 scene 文件在加载时写：ERAS.find(e => e.id === 'sXX').transition = { type, dur }。
+// SpaceX's 24 years · segment table. Segment lengths come from spacex/timing.js (generated from narration measurements; don't edit by hand);
+// each segment's entering transition is written by that segment's scene file at load time: ERAS.find(e => e.id === 'sXX').transition = { type, dur }.
 window.PUNCH = 0;
 window.FPS_HINT = 30;
 window.SCENE_LIBS = ['spacex/timing.js', 'spacex/tm.js', 'spacex/rockets.js'];

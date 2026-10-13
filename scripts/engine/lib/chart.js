@@ -1,16 +1,16 @@
-// 数据图表动画 CH：比例尺、好看的刻度、网格（先出）、柱（从 0 长出）、折线（按时间画出、头部圆点）、K 线（逐根）、
-// 标注（点→引线→文字）、经济学人式版式（顶红线＋红色小旗＋标题＋单位副标题＋来源注＋「示意数据」角标）。
-// 顺序铁律（准确性＋可读性）：坐标系先出 → 数据后出 → 标注最后、一镜只标一件事；柱状图基线必须是 0（纵轴不从 0 开始要在副标题写明）；
-// 动画只改「怎么出现」，不改数值；单位写在副标题；虚构/示意数据每一镜角落都标。
+// Data chart animation CH: scales, nice ticks, grids (first), bars (growing from 0), lines (drawn by time, with a head dot), candlesticks (one by one),
+// annotations (dot → leader → text), Economist-style layout (thin red line at the top + small red tag + title + unit subtitle + source note + "illustrative data" badge).
+// Iron rule of order (accuracy + readability): axes first → data after → annotation last, one thing labeled per shot; bar charts must have a 0 baseline (if the y-axis doesn't start at 0, say so in the subtitle);
+// animation only changes "how it appears", never the values; units go in the subtitle; fictional/illustrative data is marked in a corner of every shot.
 (() => {
-let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // 画布尺寸跟 U.setStage 走（默认 1920×1080）
+let W = 1920, H = 1080; U.onStage((w, h) => { W = w; H = h; });   // canvas size follows U.setStage (default 1920×1080)
 const { clamp, lerp } = U;
 const CH = window.CH = {};
 const seg = (t, a, b) => clamp((t - a) / (b - a));
 
-// 线性比例尺：值 → 屏幕；f.inv 反查
+// Linear scale: value → screen; f.inv for the inverse
 CH.lin = (d0, d1, r0, r1) => { const f = v => r0 + (v - d0) / (d1 - d0) * (r1 - r0); f.inv = y => d0 + (y - r0) / (r1 - r0) * (d1 - d0); return f; };
-// 1/2/2.5/5×10^k 的好看刻度
+// Nice ticks at 1/2/2.5/5×10^k
 CH.ticks = (min, max, n = 5) => {
   const raw = (max - min) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), steps = [1, 2, 2.5, 5, 10];
   const step = steps.map(s => s * mag).find(s => s >= raw) || 10 * mag;
@@ -18,8 +18,8 @@ CH.ticks = (min, max, n = 5) => {
 };
 CH.mixHex = (a, b, t) => { const A = PAINT.hex(a), B = PAINT.hex(b); return `rgb(${lerp(A[0], B[0], t) | 0},${lerp(A[1], B[1], t) | 0},${lerp(A[2], B[2], t) | 0})`; };
 
-// ---------- 网格：水平线从左往右逐条画出（lag 错开），零线更深更粗；刻度值跟着淡入 ----------
-// F = {x,y,w,h} 绘图区；ys = 刻度值；yS = 值→屏幕 y；p = 0..1
+// ---------- grid: horizontal lines drawn one by one from left to right (staggered), the zero line darker and thicker; tick values fade in along ----------
+// F = {x,y,w,h} plot area; ys = tick values; yS = value → screen y; p = 0..1
 CH.grid = (c, F, ys, yS, p, { col = 'rgba(0,0,0,.14)', zeroCol = '#121212', lw = 1.5, zeroLw = 3, lag = 0.12, font = '28px sans-serif', labelCol = '#5b5b5b', fmt = v => String(v), side = 'right', labelDy = -10 } = {}) => {
   c.save(); c.font = font; c.textBaseline = 'alphabetic';
   ys.forEach((v, i) => {
@@ -34,15 +34,15 @@ CH.grid = (c, F, ys, yS, p, { col = 'rgba(0,0,0,.14)', zeroCol = '#121212', lw =
   });
   c.restore();
 };
-// x 轴标签（年份等）：逐个淡入上移。items = [{x, label}]
+// x-axis labels (years etc.): fading in and rising one by one. items = [{x, label}]
 CH.xLabels = (c, items, y, p, { font = '28px sans-serif', col = '#3a3a3a', lag = 0.1 } = {}) => {
   c.save(); c.font = font; c.textAlign = 'center'; c.fillStyle = col;
   items.forEach((it, i) => { const q = MO.quintOut(MO.lagged(i, items.length, p, lag)); if (q <= 0) return; c.globalAlpha = q; c.fillText(it.label, it.x, y + (1 - q) * 14); });
   c.restore();
 };
 
-// ---------- 柱：从基线 0 长出（quintOut），数值标签与柱顶同步计数（等宽数字） ----------
-// data: [{x, v}]；bw 柱宽；p 0..1 总进度；hi 高亮下标（其余按 hiP 过渡到 dimCol）。返回各柱顶 [[x,y]]
+// ---------- bars: growing from the 0 baseline (quintOut), value labels counting in sync with the bar tops (fixed-width digits) ----------
+// data: [{x, v}]; bw bar width; p 0..1 overall progress; hi highlighted index (the rest transition to dimCol by hiP). Returns each bar top [[x,y]]
 CH.bars = (c, data, yS, bw, p, { lag = 0.18, col = '#1f5c99', hi = -1, hiP = 0, hiCol, dimCol = '#b9c3cc', label = true, fmt = v => v.toFixed(0), font = '30px sans-serif', labelCol = '#121212' } = {}) => {
   const y0 = yS(0), tops = [];
   data.forEach((d, i) => {
@@ -54,7 +54,7 @@ CH.bars = (c, data, yS, bw, p, { lag = 0.18, col = '#1f5c99', hi = -1, hiP = 0, 
     tops.push([d.x, y]);
     if (label && q > 0) {
       c.save(); c.font = font; c.textAlign = 'center'; c.fillStyle = labelCol; c.globalAlpha = seg(q, 0.05, 0.4);
-      if (d.v < 0) { c.textBaseline = 'top'; TY.tabular(c, fmt(v), d.x, y + 12, { align: 'center' }); }   // 负数柱：数值写在柱底下方，别写进柱子里
+      if (d.v < 0) { c.textBaseline = 'top'; TY.tabular(c, fmt(v), d.x, y + 12, { align: 'center' }); }   // negative bars: write the value below the bar bottom, not inside the bar
       else TY.tabular(c, fmt(v), d.x, y - 14, { align: 'center' });
       c.restore();
     }
@@ -62,8 +62,8 @@ CH.bars = (c, data, yS, bw, p, { lag = 0.18, col = '#1f5c99', hi = -1, hiP = 0, 
   return tops;
 };
 
-// ---------- 折线：按 x（时间）推进画出；头部圆点；可选面积渐变；返回头部点 ----------
-// pts: 屏幕坐标（x 递增）；p: 0..1 = 画到 x 范围的哪里。area = {top, base, c0, c1}
+// ---------- lines: drawn advancing by x (time); head dot; optional area gradient; returns the head point ----------
+// pts: screen coordinates (x increasing); p: 0..1 = how far along the x range to draw. area = {top, base, c0, c1}
 CH.line = (c, pts, p, { col = '#e3120b', lw = 5, head = true, headR = 9, area, glow } = {}) => {
   if (p <= 0) return null;
   const xEnd = lerp(pts[0][0], pts[pts.length - 1][0], clamp(p));
@@ -84,11 +84,11 @@ CH.line = (c, pts, p, { col = '#e3120b', lw = 5, head = true, headR = 9, area, g
     c.strokeStyle = '#fff'; c.lineWidth = 3; c.stroke(); c.restore(); }
   return hp;
 };
-// 折线在 x 处的 y（标注要钉在线上）
+// The line's y at x (annotations must be pinned to the line)
 CH.yAt = (pts, x) => { for (let i = 1; i < pts.length; i++) if (pts[i][0] >= x) { const a = pts[i - 1], b = pts[i]; return lerp(a[1], b[1], (x - a[0]) / (b[0] - a[0])); } return pts[pts.length - 1][1]; };
 
-// ---------- K 线：逐根出现，实体从开盘价长到收盘价，影线随后；默认红涨绿跌（A 股惯例，海外片换成绿涨红跌并在副标题写明） ----------
-// rows: [{o,h,l,c}]；xs: 每根中心 x；cw 实体宽；p 0..1
+// ---------- candlesticks: appearing one by one, bodies growing from open to close, wicks after; default red up / green down (A-share convention; for international films switch to green up / red down and say so in the subtitle) ----------
+// rows: [{o,h,l,c}]; xs: each candle's center x; cw body width; p 0..1
 CH.candles = (c, rows, xs, yS, cw, p, { up = '#e0322f', down = '#11a05a', lag = 0.06, hollowUp = false } = {}) => {
   rows.forEach((r, i) => {
     const q = MO.lagged(i, rows.length, p, lag); if (q <= 0) return;
@@ -104,8 +104,8 @@ CH.candles = (c, rows, xs, yS, cw, p, { up = '#e0322f', down = '#11a05a', lag = 
   });
 };
 
-// ---------- 标注：圆点弹出（弹簧）→ 脉冲环 → 引线画出 → 文字淡入。时间用秒，便于对口播 ----------
-// lt 秒；t0 开始时刻；(x,y) 数据点；(tx,ty) 文字锚点；lines 第一行用 font、其余用 font2（数字先说，比较后说）
+// ---------- annotation: dot pops (spring) → pulse ring → leader drawn → text fades in. Time in seconds, to sync with narration ----------
+// lt seconds; t0 start time; (x,y) data point; (tx,ty) text anchor; the first line of lines uses font, the rest font2 (number first, comparison after)
 CH.callout = (c, lt, t0, { x, y, tx, ty, lines = [], col = '#121212', dotCol = '#e3120b', font = '600 30px sans-serif', font2, align = 'left', r = 11 }) => {
   const k = lt - t0; if (k <= 0) return;
   const s = MO.spring(k, { duration: 0.45, bounce: 0.25 });
@@ -123,18 +123,18 @@ CH.callout = (c, lt, t0, { x, y, tx, ty, lines = [], col = '#121212', dotCol = '
   c.restore();
 };
 
-// ---------- 版式 ----------
+// ---------- layout ----------
 CH.tag = (c, x, y, w = 64, h = 14, col = '#e3120b') => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-// 「示意数据」角标：右下圆角框。虚构数据每一镜都要有
-CH.demoBadge = (c, text = '示意数据', { x = W - 40, y = 1040, font = '600 24px sans-serif', col = '#7a7a7a', box = 'rgba(0,0,0,.06)' } = {}) => {
+// "Illustrative data" badge: a rounded box at the bottom right. Every shot needs one for fictional data
+CH.demoBadge = (c, text = 'Illustrative data', { x = W - 40, y = 1040, font = '600 24px sans-serif', col = '#7a7a7a', box = 'rgba(0,0,0,.06)' } = {}) => {
   c.save(); c.font = font; c.textAlign = 'right'; c.textBaseline = 'middle';
   const w = c.measureText(text).width + 28; c.fillStyle = box; c.beginPath(); c.roundRect(x - w, y - 22, w, 44, 8); c.fill();
   c.strokeStyle = col; c.globalAlpha = 0.5; c.lineWidth = 1.5; c.stroke(); c.globalAlpha = 1;
   c.fillStyle = col; c.fillText(text, x - 14, y + 1); c.restore();
 };
-// 经济学人式整页版式（每镜都画）：白底 → 顶部细红线从左画出 → 左上红色小旗 → 标题 → 副标题（单位/口径）→ 左下来源 → 右下「示意数据」。
-// lt = 本镜时间（版式 0.6s 内全部到位，之后才出坐标系）。badge 传 false 不画角标（真实数据时）。
-CH.frame = (c, lt, { title, sub, source = '来源：示意数据', badge = '示意数据', bg = '#FFFFFF', red = '#E3120B', ink = '#0C0C0C', subCol = '#4F5B61', srcCol = '#7c868b',
+// Economist-style full-page layout (drawn every shot): white background → thin red line drawn from the left at the top → small red tag at top left → title → subtitle (unit/measure) → source at bottom left → "illustrative data" at bottom right.
+// lt = this shot's time (the layout is fully in place within 0.6s, and only then do the axes appear). Pass badge false to skip the badge (for real data).
+CH.frame = (c, lt, { title, sub, source = 'Source: illustrative data', badge = 'Illustrative data', bg = '#FFFFFF', red = '#E3120B', ink = '#0C0C0C', subCol = '#4F5B61', srcCol = '#7c868b',
   font = '"NotoSansSC"', x = 90 } = {}) => {
   c.fillStyle = bg; c.fillRect(0, 0, W, H);
   const p = MO.quintOut(MO.seg(lt, 0, 0.45));

@@ -1,6 +1,6 @@
-// S4 大全景（同一个房间拉远到 0.5 倍）：小小的花叔坐在大房间里。口播「我问它：这些……」
-// 全景让人显得渺小无助 —— 远景本身就是笑点的铺垫。返修：两段停顿里加「眼睛瞟一下电脑再看镜头」、说「这些」时指电脑。
-// 动：口型、眼神（6.2 瞟电脑 → 6.6 回到镜头）、换姿势回弹（talk → point）、吊灯摆、云飘、屏幕光闪、镜头极慢拉远。
+// S4 wide shot (the same room pulled back to 0.5×): a tiny Huashu sitting in a big room. Voiceover: "I asked it: all this…"
+// A wide shot makes a person look small and helpless — the wide itself sets up the joke. Revision: in the two pauses, added "eyes glance at the computer, then back at the camera", and pointing at the computer when saying "all this".
+// Motion: mouth shapes, eyes (glancing at the computer at 6.2 → back to camera at 6.6), pose-change rebound (talk → point), hanging lamp swinging, clouds drifting, screen light flickering, a very slow camera pull-back.
 (() => {
 const S = STORY;
 SCENES['s4_wide'] = {

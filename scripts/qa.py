@@ -2,38 +2,38 @@
 # /// script
 # dependencies = ["playwright", "numpy", "pillow"]
 # ///
-"""一条命令验收一个代码动画工程：稳定性、效率、动感、流畅，出数字＋拼图。交付前必跑，数字写进交付说明。
+"""Accept a code animation project in one command: stability, efficiency, motion, smoothness, with numbers + contact sheets. Must run before delivery; the numbers go into the delivery notes.
 
-    uv run qa.py --project <代码工程目录> [--film gallery] [--ids 01_cave,09_postimp] [--fps 30] [--out <目录>]
-    uv run qa.py --spec <片段 clip.json> [--out <目录>]      # 参数化片段（口播管线的动画段）：整段当一段量，竖屏也行；不量转场
-                                                              # 素材字段和 render.py 同一套（engine/spec_assets.py）：image、frames、data.image、data.character
+    uv run qa.py --project <engine project dir> [--film gallery] [--ids 01_cave,09_postimp] [--fps 30] [--out <dir>]
+    uv run qa.py --spec <clip clip.json> [--out <dir>]      # parameterized clip (an animation segment for a narration pipeline): measured as one segment, portrait works too; transitions not measured
+                                                              # Asset fields are the same set as render.py (engine/spec_assets.py): image, frames, data.image, data.character
 
-逐段（eras.js 的每个 id）做四件事：
-  1. 稳定：场景加载失败直接退出（引擎 __bootErrors）；同一时刻冷渲＋热渲两次逐像素比对（确定性）。
-  2. 效率：每帧耗时——计时包含一次 getImageData(1×1) 强制 GPU 画完（只量 JS 同步时间会报出假的 1ms；迁移测试 B 踩过）。
-  3. 动感：避开转场后 0.35s 镜头冲击，在本段静止区按 --fps 连续取帧，报运动面积（相邻帧变化 >12 的像素占比）均值，
-     和「静止帧对」比例（相邻帧几乎不变 <0.05% —— 迁移测试 A 发现只看首尾差会漏掉一卡一卡）。
-  4. 流畅：相邻帧差的峰值 / 中位数。>6 且峰值 >3% 记为「跳变」（整屏笔触按 8fps 重洗、某帧穿帮、闪烁都会冒出来）。
-     镜头动作（快推 0.28s、横移 0.30s、砸入 0.17s，缓推 0.9s、找下一件 0.7s、拉远 1.1s）不算跳变，单独记为「镜头事件」：从跳变帧往两边扩到帧差回落，
-     这一串至少 2 对帧、不长于 2s（+1 帧），且最后一帧离第一帧最远（推过去就停在那，不是闪一下又回来）；长于 0.35s 的还要一路平滑，
-     中间没有比前后两帧大 2.5 倍以上的单帧尖峰。2026-10-12 之前只认 0.35s 以内的，缓推会被整串记成跳变，等于逼着模型把镜头改快。
-     孤立的一两帧（穿帮、闪白、整屏重洗）、闪过去又回来的、连续拖得更长的，照旧记跳变。只看像素，不读相机动作表，
-     所以手写的推镜和 CAM.track 一样认；代价是单调、平滑的大变化（比如一下子整屏换成另一张图又刚好接着推）也会被当成镜头事件。
-另做「转场冒烟」：每个带转场的段在 p=.25/.5/.75 渲整帧（renderFrame），报错计入页面报错——段内取帧用 renderSolo，
-转场代码一次都不会执行，转场崩了也能全绿（全风格样片移植时踩到）。
-判据是经验阈值不是规则：运动 0.5–8% 之间多数段好看；静止帧对 >40% 读作卡；跳变 >0 先看帧再判断（有意的节拍闪不算错）。
-  5. 框景：
-     从页面加载起就记下每次 fillText/strokeText 在屏幕上的外框，取帧时持续 ≥0.3s 才报——
-     半截字（字被画面边缘切掉一部分）、叠字（两串不同的字互相压住）、进字幕带（字落进字幕带，烧录字幕会盖住）；
-     另报「近空白」（整屏几乎没有内容：满屏闪白、黑场）。都是「去看这一帧」的线索，不是错误，不让 qa 失败。
-     外框跟着画布走：画进离屏缓冲／精灵缓存（包括启动时预画的缓存）再 drawImage 上来的字，位图推镜后的字，都量得到。
-     字幕带：整片默认 y>920/1080（--sub-band 改，0 关掉）；--spec 片段读 spec 的 safe.bottom，没有就不查。
-     盲区：①取帧从每段 max(--skip, 转场时长) 开始，段首和转场里的问题看不到；「段首空板」上只要留着笔或手（占比 >0.3%）也不算近空白。
-     ②画在 clip 里的字（滚动数字、按笔顺揭开）只查半截字和字幕带，不判叠字。③被非文字物件（照片、回形针、讲解员、后弹出的卡片）挡住的字查不到，
-     两串都被盖住时还会误报叠字。④图形（火焰、飞船）进字幕带查不到，浅底风格用成片层的 scripts/subzone_gate.py。
-     ⑤逐字手写的字按单字报，去看帧才能定位；有意压在字幕带或画外的装饰大字（如 y5 的巨型水印数字）会被报出来，看过就放。
+For each segment (each id in eras.js) it does four things:
+  1. Stability: a scene that fails to load exits immediately (the engine's __bootErrors); the same moment is rendered cold + warm and compared pixel by pixel (determinism).
+  2. Efficiency: time per frame — timing includes one getImageData(1×1) to force the GPU to finish (measuring only synchronous JS time reports a fake 1ms; migration test B hit this).
+  3. Motion: skipping the 0.35s camera punch after a transition, grab consecutive frames at --fps in the segment's still region and report the mean motion area (share of pixels changing >12 between adjacent frames),
+     and the "static frame pair" ratio (adjacent frames barely changing, <0.05% — migration test A found that looking only at the first-vs-last difference misses stutter).
+  4. Smoothness: peak / median of adjacent-frame differences. >6 with a peak >3% is recorded as a "jump" (whole-screen strokes reshuffled at 8fps, a glitch frame, flicker all show up).
+     Camera moves (fast push 0.28s, pan 0.30s, slam 0.17s, slow push 0.9s, find-next 0.7s, pull out 1.1s) aren't jumps and are recorded separately as "camera events": expanding outward from the jump frame until the difference drops back,
+     the run must be at least 2 frame pairs, no longer than 2s (+1 frame), with the last frame farthest from the first (it pushes over and stays, rather than flashing and coming back); runs longer than 0.35s must also be smooth throughout,
+     without a single-frame spike more than 2.5× the frames on either side. Before 2026-10-12 only runs within 0.35s were recognized, so slow pushes were recorded as strings of jumps, which pushed models to speed up the camera.
+     Isolated one- or two-frame changes (glitches, white flashes, whole-screen reshuffles), changes that flash and come back, and longer continuous runs are still recorded as jumps. It looks only at pixels and doesn't read the camera move table,
+     so hand-written pushes count the same as CAM.track; the cost is that monotonic, smooth large changes (e.g., the whole screen switching to another image that then happens to push in) are also treated as camera events.
+It also does a "transition smoke test": each segment with a transition renders whole frames (renderFrame) at p=.25/.5/.75, with errors counted as page errors — grabbing frames within a segment uses renderSolo,
+which never executes transition code, so a broken transition could still be all green (hit while porting the all-style sample film).
+The criteria are rules of thumb, not laws: motion of 0.5–8% looks good for most segments; static frame pairs >40% read as stuck; for jumps >0, look at the frames before judging (intentional beat flashes aren't errors).
+  5. Framing:
+     From page load it records the on-screen bounding box of every fillText/strokeText, reporting only issues that persist ≥0.3s when frames are grabbed —
+     cut-off text (text partly cut off by the frame edge), overlapping text (two different strings covering each other), in subtitle band (text falling into the subtitle band, where burned-in subtitles would cover it);
+     it also reports "near-blank" (almost nothing on screen: a full white flash, black). All of these are cues to "go look at this frame", not errors, and don't make qa fail.
+     Bounding boxes follow the canvas: text drawn into an offscreen buffer / sprite cache (including caches prewarmed at startup) and then drawImage'd up, and text after a bitmap push, are all measured.
+     Subtitle band: whole films default to y>920/1080 (change with --sub-band, 0 turns it off); --spec clips read the spec's safe.bottom, and if absent it isn't checked.
+     Blind spots: ① frames are grabbed from max(--skip, transition duration) into each segment, so problems at the start of segments and inside transitions aren't seen; an "empty board at the start of a segment" isn't near-blank as long as a pen or hand remains (>0.3% of the area).
+     ② Text drawn inside a clip (rolling numbers, revealed in stroke order) is only checked for cut-off text and the subtitle band, not overlap. ③ Text covered by non-text objects (photos, paper clips, presenters, cards popping in later) can't be detected,
+     and when both strings are covered it may falsely report overlap. ④ Graphics (flames, spaceships) entering the subtitle band aren't detected; for light-background styles use scripts/subzone_gate.py on the final film.
+     ⑤ Handwritten text written character by character is reported per character, so look at the frame to locate it; big decorative text deliberately placed in the subtitle band or off-frame (like y5's giant watermark numbers) gets reported — once checked, let it go.
 
-产物：<out>/qa.json（全部数字）、<out>/qa.md（表）、<out>/<id>.jpg（4 帧拼图＋运动热图）。
+Outputs: <out>/qa.json (all numbers), <out>/qa.md (table), <out>/<id>.jpg (4-frame contact sheet + motion heatmap).
 """
 import argparse, base64, functools, http.server, io, json, socketserver, sys, threading, urllib.parse
 from pathlib import Path
@@ -44,20 +44,20 @@ from PIL import Image, ImageDraw
 from playwright.sync_api import sync_playwright
 
 ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-ap.add_argument('--project'); ap.add_argument('--spec', help='参数化片段 spec（走 clip.html，和 render.py --spec 同一套）'); ap.add_argument('--ids'); ap.add_argument('--fps', type=float, default=30)
-ap.add_argument('--out'); ap.add_argument('--film', default='', help='片子名：读 eras_<名>.js'); ap.add_argument('--skip', type=float, default=0.35, help='每段开头跳过的秒数（镜头冲击）')
-ap.add_argument('--sub-band', type=float, default=None, help='字幕带上沿（占画高比例）；整片默认 0.852（920/1080），--spec 默认读 safe.bottom；写 0 关掉「进字幕带」检查')
+ap.add_argument('--project'); ap.add_argument('--spec', help='parameterized clip spec (goes through clip.html, the same as render.py --spec)'); ap.add_argument('--ids'); ap.add_argument('--fps', type=float, default=30)
+ap.add_argument('--out'); ap.add_argument('--film', default='', help='film name: reads eras_<name>.js'); ap.add_argument('--skip', type=float, default=0.35, help='seconds skipped at the start of each segment (camera punch)')
+ap.add_argument('--sub-band', type=float, default=None, help='top edge of the subtitle band (fraction of frame height); whole films default to 0.852 (920/1080), --spec defaults to reading safe.bottom; 0 turns off the "in subtitle band" check')
 a = ap.parse_args()
-if not (a.project or a.spec): ap.error('--project 或 --spec 二选一')
+if not (a.project or a.spec): ap.error('give either --project or --spec')
 spec, ALLOWED = None, set()
-if a.spec:                                                 # 和 render.py 同一套：本地素材（image / frames / 角色帧库）只服务 spec 里点名的文件
+if a.spec:                                                 # same as render.py: local assets (image / frames / character frame libraries) serve only the files named in the spec
     sp = Path(a.spec).resolve(); spec = json.loads(sp.read_text())
     try: spec_assets.localize(spec, sp.parent, ALLOWED)
     except FileNotFoundError as e: raise SystemExit(str(e))
 root = Path(a.project).resolve() if a.project else Path(__file__).resolve().parent / 'engine'
 out = Path(a.out) if a.out else (Path(a.spec).resolve().parent / 'qa' if a.spec else root.parent / 'qa'); out.mkdir(parents=True, exist_ok=True)
 VW, VH = (spec.get('width', 1920), spec.get('height', 1080)) if spec else (1920, 1080)
-if a.sub_band is None:   # 片段给管线用：字幕让位写在 spec 的 safe.bottom 里，没写就当没有烧录字幕
+if a.sub_band is None:   # clips are for pipelines: subtitle clearance is written in the spec's safe.bottom; if absent, assume no burned-in subtitles
     sb = ((spec or {}).get('safe') or {}).get('bottom', 0) if spec else None
     a.sub_band = 0.852 if sb is None else (1 - sb / VH if sb else 0)
 
@@ -76,18 +76,18 @@ class LocalServer(socketserver.ThreadingTCPServer):
 srv = LocalServer(('127.0.0.1', 0), functools.partial(Q, directory=str(root))); port = srv.server_address[1]
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 
-# 框景检查：包一层 fillText/strokeText，记下画在「整屏大小的画布」上的字的屏幕外框（经过当前变换）
+# Framing check: wrap fillText/strokeText and record the on-screen bounding box (through the current transform) of text drawn on "full-screen-sized canvases"
 TEXT_HOOK = '''(() => {
-  // 字的外框记在「它被画上的那张画布」上；这张画布被 drawImage 贴到别处时，外框跟着变换过去。
-  // 这样先画进离屏缓冲再整体推镜（讲解员片的位图推镜）、画进精灵缓存再贴上桌（Vox 的剪纸）的字也量得到。
+  // A text box is recorded on "the canvas it was drawn on"; when that canvas is drawImage'd elsewhere, the boxes follow the transform.
+  // So text drawn into an offscreen buffer and then pushed as a whole (the presenter film's bitmap push) or drawn into a sprite cache and then pasted on the desk (Vox cut-outs) is measured too.
   const P = CanvasRenderingContext2D.prototype;
   const sv = P.save, rs = P.restore, cl = P.clip, di = P.drawImage, cr = P.clearRect, fr = P.fillRect;
-  // 记住「当前有没有 clip」：滚动数字、按笔顺揭开的字都画在 clip 里，外框比看得见的大，不拿来判叠字
+  // Remember "whether there's a clip right now": rolling numbers and stroke-order reveals are drawn inside clips, with boxes bigger than what's visible, so they aren't used to judge overlap
   P.save = function () { (this.__cs || (this.__cs = [])).push(!!this.__clip); return sv.apply(this, arguments); };
   P.restore = function () { if (this.__cs && this.__cs.length) this.__clip = this.__cs.pop(); return rs.apply(this, arguments); };
   P.clip = function () { this.__clip = true; return cl.apply(this, arguments); };
-  // 「整张画布被盖掉」时清空这张画布的外框记录，不然缓存画布重画后，上一段的字还留在记录里（白板 s03 的「火箭」误报到 s04）
-  const full = (ctx, x, y, w, h) => {                        // 这个矩形经过当前变换后是否盖满整张画布（只认无旋转的变换）
+  // When "the whole canvas is covered", clear that canvas's box records, otherwise after a cache canvas is redrawn the previous segment's text lingers in the records (the whiteboard's "rocket" in s03 was falsely reported in s04)
+  const full = (ctx, x, y, w, h) => {                        // whether this rectangle, after the current transform, covers the whole canvas (only for transforms without rotation)
     const T = ctx.getTransform(); if (T.b !== 0 || T.c !== 0) return false;
     const xs = [T.a * x + T.e, T.a * (x + w) + T.e], ys = [T.d * y + T.f, T.d * (y + h) + T.f];
     return Math.min(...xs) <= 0 && Math.min(...ys) <= 0 && Math.max(...xs) >= ctx.canvas.width && Math.max(...ys) >= ctx.canvas.height;
@@ -98,15 +98,15 @@ TEXT_HOOK = '''(() => {
   if (P.reset) { const rz = P.reset; P.reset = function () { this.canvas.__tb = []; this.__cs = []; this.__clip = false; return rz.apply(this, arguments); }; }
   const pid = P.putImageData;
   P.putImageData = function (im, x, y) { if (x <= 0 && y <= 0 && x + im.width >= this.canvas.width && y + im.height >= this.canvas.height) this.canvas.__tb = []; return pid.apply(this, arguments); };
-  for (const k of ['width', 'height']) {                       // 改画布尺寸会清空画布，外框也清掉
+  for (const k of ['width', 'height']) {                       // resizing a canvas clears it, so clear the boxes too
     const d = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, k);
     Object.defineProperty(HTMLCanvasElement.prototype, k, { get: d.get, set(v) { this.__tb = []; d.set.call(this, v); }, configurable: true });
   }
-  const push = (ctx, rec) => { const L = ctx.canvas.__tb || (ctx.canvas.__tb = []); L.push(rec); if (L.length > 6000) L.splice(0, 3000); };   // 只局部清、反复重画的画布会越记越多，留最近的
+  const push = (ctx, rec) => { const L = ctx.canvas.__tb || (ctx.canvas.__tb = []); L.push(rec); if (L.length > 6000) L.splice(0, 3000); };   // canvases only partly cleared and redrawn repeatedly accumulate records; keep the most recent
   for (const fn of ['fillText', 'strokeText']) {
     const orig = P[fn];
     P[fn] = function (text, x, y, maxW) {
-      if (this.globalAlpha > 0.15 && String(text).trim()) {     // 从加载起一直记：启动时预画进缓存的字（Vox 的 prewarm）也要有外框
+      if (this.globalAlpha > 0.15 && String(text).trim()) {     // record from load onward: text prewarmed into caches at startup (Vox's prewarm) needs boxes too
         const m = this.measureText(text), T = this.getTransform();
         let x0 = x - m.actualBoundingBoxLeft, x1 = x + m.actualBoundingBoxRight;
         if (maxW && x1 - x0 > maxW) x1 = x0 + maxW;
@@ -121,7 +121,7 @@ TEXT_HOOK = '''(() => {
   P.drawImage = function (src, ...a) {
     if (this.globalCompositeOperation === 'copy') this.canvas.__tb = [];
     const L = src && src.__tb;
-    if (L && L.length && src !== this.canvas && this.globalAlpha > 0.5) {   // ≤0.5 多半是运动残影／拖尾叠层，不传（白板甩镜残影会叠出满屏假叠字）
+    if (L && L.length && src !== this.canvas && this.globalAlpha > 0.5) {   // ≤0.5 is usually motion ghosting / trail layers, not passed on (whiteboard whip-pan ghosts would stack into a screen full of fake overlaps)
       let sx = 0, sy = 0, sw = src.width, sh = src.height, dx, dy, dw = sw, dh = sh;
       if (a.length === 2) [dx, dy] = a; else if (a.length === 4) [dx, dy, dw, dh] = a; else [sx, sy, sw, sh, dx, dy, dw, dh] = a;
       const T = this.getTransform(), kx = dw / sw, ky = dh / sh, clip = !!this.__clip || a.length === 8;
@@ -139,46 +139,46 @@ GRAB = '''async ([id, lt, full]) => {
   window.__tb = true; window.__canvas.__tb = [];
   const s = performance.now();
   if (full) { await window.prepare(lt); window.renderFrame(lt); } else window.renderSolo(id, lt);
-  window.__canvas.getContext('2d').getImageData(0, 0, 1, 1);           // 强制 GPU 画完再停表
+  window.__canvas.getContext('2d').getImageData(0, 0, 1, 1);           // force the GPU to finish before stopping the clock
   const ms = performance.now() - s;
   const M = window.__canvas, tb = (M.__tb || []).map(([t, xs, ys, c]) => [t, xs.map(v => v / M.width), ys.map(v => v / M.height), c]); window.__tb = null;
   return [ms, window.__canvas.toDataURL('image/png').split(',')[1], tb];
 }'''
 
 def frame_issues(tb, band):
-    """一帧里的框景问题：[(类别, 文字)]。坐标都是占画面的比例。"""
+    """Framing issues in one frame: [(category, text)]. Coordinates are fractions of the frame."""
     out, vis = [], []
     for txt, cxs, cys, clipped in tb:
         x0, y0, x1, y1 = min(cxs), min(cys), max(cxs), max(cys)
         ang = float(np.arctan2((cys[1] - cys[0]) * VH, (cxs[1] - cxs[0]) * VW))
         w, h = x1 - x0, y1 - y0
-        if w <= 0 or h <= 0 or h < 0.008: continue                 # 太小的字（<9px）不管
+        if w <= 0 or h <= 0 or h < 0.008: continue                 # text that's too small (<9px) is ignored
         ix0, iy0, ix1, iy1 = max(x0, 0), max(y0, 0), min(x1, 1), min(y1, 1)
-        if ix1 <= ix0 or iy1 <= iy0: continue                      # 整个在画外：镜头没拍到，不算
+        if ix1 <= ix0 or iy1 <= iy0: continue                      # entirely off-frame: the camera didn't capture it, doesn't count
         frac = (ix1 - ix0) * (iy1 - iy0) / (w * h)
-        if frac < 0.9 and frac > 0.1: out.append(('半截字', txt))
-        if band and iy1 > band + 0.004 and frac > 0.1: out.append(('进字幕带', txt))
+        if frac < 0.9 and frac > 0.1: out.append(('cut-off text', txt))
+        if band and iy1 > band + 0.004 and frac > 0.1: out.append(('in subtitle band', txt))
         if not clipped: vis.append((txt, ang, cxs, cys))
-    def box(v, ang):                                                    # 转到 ang 的坐标系里取外框：斜放标签的两行字不会因外接框变大而互相「重叠」
+    def box(v, ang):                                                    # bounding box in ang's coordinate system: two lines of a slanted label don't "overlap" just because the bounding box grows
         c, s_ = np.cos(-ang), np.sin(-ang)
         u = [x * c - y * s_ * VH / VW for x, y in zip(v[2], v[3])]; w = [x * s_ * VW / VH + y * c for x, y in zip(v[2], v[3])]
         return min(u), min(w), max(u), max(w)
     for i in range(len(vis)):
         for j in range(i + 1, len(vis)):
             a, b = vis[i], vis[j]
-            if a[0] == b[0]: continue                                   # 同一串字画两遍（描边＋填色、投影）
+            if a[0] == b[0]: continue                                   # the same string drawn twice (stroke + fill, drop shadow)
             same = abs(a[1] - b[1]) < 0.02; ang = a[1] if same else 0.0
             A, B = box(a, ang), box(b, ang)
-            if not same:                                                # 角度不同（手写字逐字抖动）：外接框会胖一圈，各自内缩 12% 再比
+            if not same:                                                # different angles (handwritten text wobbling per character): bounding boxes grow a bit, so shrink each by 12% before comparing
                 A, B = [(r[0] + (r[2] - r[0]) * .12, r[1] + (r[3] - r[1]) * .12, r[2] - (r[2] - r[0]) * .12, r[3] - (r[3] - r[1]) * .12) for r in (A, B)]
             ow = min(A[2], B[2]) - max(A[0], B[0]); oh = min(A[3], B[3]) - max(A[1], B[1])
             if ow <= 0 or oh <= 0: continue
             small = min((A[2] - A[0]) * (A[3] - A[1]), (B[2] - B[0]) * (B[3] - B[1]))
-            if ow * oh / small > 0.3: out.append(('叠字', a[0] + '｜' + b[0]))
+            if ow * oh / small > 0.3: out.append(('overlapping text', a[0] + ' | ' + b[0]))
     return out
 
 def persistent(ts, per_frame, min_s=0.3):
-    """同一个问题连续出现 ≥min_s 秒才报（镜头摇过去的那几帧半截字是正常的）。"""
+    """Report an issue only if it persists ≥min_s seconds (cut-off text for the few frames while the camera pans past is normal)."""
     runs, open_ = [], {}
     for k, t in enumerate(ts):
         cur = set(per_frame[k])
@@ -193,23 +193,23 @@ def persistent(ts, per_frame, min_s=0.3):
     return sorted(runs, key=lambda r: r[1])
 
 def merge_runs(runs):
-    """逐字打出来的字会一字一条：同类、时间相交的并成一条，字连起来。"""
+    """Text typed out character by character produces one record per character: merge records of the same kind that overlap in time, joining the text."""
     out = []
     for (kind, txt), t0, t1 in sorted(runs, key=lambda r: (r[0][0], r[1])):
         if out and out[-1][0] == kind and t0 <= out[-1][3] + 0.05:
             o = out[-1]; o[3] = max(o[3], t1)
-            if txt and txt not in o[1].split('、') and len(o[1]) < 60: o[1] = (o[1] + '、' + txt).strip('、')
+            if txt and txt not in o[1].split(', ') and len(o[1]) < 60: o[1] = (o[1] + ', ' + txt).strip(', ')
         else: out.append([kind, txt, t0, t1])
     return sorted(out, key=lambda r: r[2])
 
 def near_blank(f):
-    """和画面主色差 >24 的像素占比 <0.3% 读作「几乎没有内容」。"""
+    """A share of <0.3% of pixels differing from the dominant color by >24 reads as "almost nothing on screen"."""
     med = np.median(f.reshape(-1, 3), axis=0)
     return float((np.abs(f - med).max(axis=2) > 24).mean()) < 0.003
-def img(b64, w=480): return np.asarray(Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB').resize((w, round(w * VH / VW)))).astype(np.int16)   # 按画幅缩，竖屏不压扁
+def img(b64, w=480): return np.asarray(Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB').resize((w, round(w * VH / VW)))).astype(np.int16)   # scale by aspect ratio so portrait isn't squashed
 
 def camera_events(frames, diffs, idx, fps, max_s=2.0):
-    """把跳变里的镜头动作（推拉、横移、砸入）挑出来（判据见文件头第 4 条）。idx：跳变所在的帧对下标。返回 (还算跳变的下标, 镜头事件 [(l, r)])。"""
+    """Pick out camera moves (push/pull, pans, slams) among the jumps (criteria in item 4 of the file header). idx: indices of the frame pairs with jumps. Returns (indices still counted as jumps, camera events [(l, r)])."""
     keep, events = [], []
     for i in idx:
         if any(l <= i <= r for l, r in events): continue
@@ -217,8 +217,8 @@ def camera_events(frames, diffs, idx, fps, max_s=2.0):
         while l > 0 and diffs[l - 1] > thr: l -= 1
         while r < len(diffs) - 1 and diffs[r + 1] > thr: r += 1
         n = r - l + 1
-        far = [float(np.abs(frames[k] - frames[l]).mean()) for k in range(l + 1, r + 2)]   # 这一串里每一帧离第一帧多远
-        smooth = n <= 0.35 * fps + 1 or all(diffs[k] <= 2.5 * max(diffs[k - 1], diffs[k + 1]) + 0.5 for k in range(l + 1, r))   # 长于 0.35s 的要一路平滑，中间不许有单帧尖峰
+        far = [float(np.abs(frames[k] - frames[l]).mean()) for k in range(l + 1, r + 2)]   # how far each frame in the run is from the first
+        smooth = n <= 0.35 * fps + 1 or all(diffs[k] <= 2.5 * max(diffs[k - 1], diffs[k + 1]) + 0.5 for k in range(l + 1, r))   # runs longer than 0.35s must be smooth throughout, no single-frame spikes
         if 2 <= n <= max_s * fps + 1 and far[-1] >= 0.8 * max(far) and smooth: events.append((l, r))
         else: keep.append(i)
     return [i for i in keep if not any(l <= i <= r for l, r in events)], events
@@ -229,7 +229,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(args=['--enable-gpu-rasterization', '--ignore-gpu-blocklist'])
     pg = br.new_page(viewport={'width': VW, 'height': VH})
     pg.on('pageerror', lambda e: errors.append(str(e)))
-    pg.on('console', lambda m: errors.append('console.error: ' + m.text) if m.type == 'error' else None)   # 缺字形等由 console.error 报出
+    pg.on('console', lambda m: errors.append('console.error: ' + m.text) if m.type == 'error' else None)   # missing glyphs etc. are reported via console.error
     pg.add_init_script(TEXT_HOOK)
     if spec:
         pg.add_init_script('window.CLIP_SPEC = ' + json.dumps(spec, ensure_ascii=False) + ';')
@@ -238,7 +238,7 @@ with sync_playwright() as p:
         pg.goto(f'http://127.0.0.1:{port}/index.html?render=1' + (f'&film={a.film}' if a.film else ''))
     pg.wait_for_function('window.__ready === true || !!window.__bootFailed', timeout=180000)
     bf = pg.evaluate('window.__bootFailed || null')
-    if bf: raise SystemExit('❌ 场景加载失败：\n' + bf)
+    if bf: raise SystemExit('❌ Scene failed to load:\n' + bf)
     segs = [{'id': Path(a.spec).resolve().parent.name, 't0': 0, 't1': spec['duration'], 'tr': 0}] if spec else \
         pg.evaluate('ERAS.map(e => ({id: e.id, t0: e.t0, t1: Math.min(e.t1, window.__total), tr: e.transition ? e.transition.dur + (e.transition.delay || 0) : 0}))')
     want = set(a.ids.split(',')) if a.ids else None
@@ -248,7 +248,7 @@ with sync_playwright() as p:
         lt1 = max(lt0 + 0.2, dur - 0.02)
         n = max(4, int((lt1 - lt0) * a.fps))
         ts = [lt0 + (lt1 - lt0) * i / (n - 1) for i in range(n)]
-        full = bool(spec)                                   # 片段没有 renderSolo，整帧渲
+        full = bool(spec)                                   # clips have no renderSolo, so render whole frames
         cold_ms, cold, _ = pg.evaluate(GRAB, [s['id'], ts[-1], full])
         frames, ms, tbs = [], [], []
         for t in ts:
@@ -257,7 +257,7 @@ with sync_playwright() as p:
         det = int(np.abs(img(again) - frames[-1]).max()); det_cold = int(np.abs(img(cold) - frames[-1]).max())
         diffs = np.array([(np.abs(frames[i + 1] - frames[i]).max(axis=2) > 12).mean() * 100 for i in range(len(frames) - 1)])
         med = float(np.median(diffs)) if len(diffs) else 0
-        if spec:   # 片段多是「动一下、定住」：全段中位数≈0，连续的推镜/滑入会整串被记成跳变。片段只认孤立的跳：比前后各 3 对的中位数大 6 倍
+        if spec:   # clips are mostly "move once, hold": the whole-clip median ≈0, so continuous pushes/slide-ins would be recorded as strings of jumps. Clips only count isolated jumps: 6× bigger than the median of 3 pairs on either side
             loc = lambda i: float(np.median(np.r_[diffs[max(0, i - 3):i], diffs[i + 1:i + 4]])) if len(diffs) > 1 else 0
             sidx = [i for i, d in enumerate(diffs) if d > 3 and d > 6 * max(loc(i), 0.05)]
         else:
@@ -273,22 +273,22 @@ with sync_playwright() as p:
                'spike_ratio': round(float(diffs.max() / max(med, 0.05)), 1), 'spikes_at_lt': spikes,
                'camera_events_lt': [[round(ts[l], 3), round(ts[r + 1], 3)] for l, r in cams]}
         frame_runs = merge_runs(persistent(ts, [frame_issues(tb, a.sub_band) for tb in tbs]) +
-                                persistent(ts, [[('近空白', '')] if near_blank(f) else [] for f in frames]))
+                                persistent(ts, [[('near-blank', '')] if near_blank(f) else [] for f in frames]))
         rec['framing'] = [{'kind': k, 'text': txt, 'lt': [round(t0, 2), round(t1, 2)], 't': [round(s['t0'] + t0, 2), round(s['t0'] + t1, 2)]} for k, txt, t0, t1 in frame_runs]
         rec['text_tracked'] = sum(map(len, tbs))
         report['segments'].append(rec)
-        # 拼图：4 帧 + 热图
+        # Contact sheet: 4 frames + heatmap
         pick = [frames[int(k)] for k in np.linspace(0, n - 1, 4)]
         H_, W_ = frames[0].shape[:2]; S = Image.new('RGB', (W_ * 5, H_ + 20), 'white'); dr = ImageDraw.Draw(S)
         for k, f in enumerate(pick): S.paste(Image.fromarray(f.astype(np.uint8)), (k * W_, 20))
         hm = np.clip(heat / max(1, heat.max()) * 255, 0, 255).astype(np.uint8)
         base = Image.fromarray(pick[0].astype(np.uint8)).convert('L').convert('RGB'); red = np.zeros((H_, W_, 3), np.uint8); red[..., 0] = hm
         S.paste(Image.blend(base, Image.fromarray(red), 0.6), (4 * W_, 20))
-        dr.text((4, 4), f"{s['id']}  运动 {rec['motion_pct']}%  静止帧对 {rec['still_pairs_pct']}%  跳变 {len(spikes)}  镜头事件 {len(cams)}  {rec['ms_mean']}/{rec['ms_max']}ms  确定性 {'✓' if rec['deterministic'] else '✗'}", fill='black')
+        dr.text((4, 4), f"{s['id']}  motion {rec['motion_pct']}%  static pairs {rec['still_pairs_pct']}%  jumps {len(spikes)}  camera events {len(cams)}  {rec['ms_mean']}/{rec['ms_max']}ms  deterministic {'✓' if rec['deterministic'] else '✗'}", fill='black')
         S.save(out / f"{s['id']}.jpg", quality=85)
-        print(f"{s['id']:<18} 运动 {rec['motion_pct']:>5}%  静止帧对 {rec['still_pairs_pct']:>5}%  跳变 {len(spikes)}  镜头事件 {len(cams)}  {rec['ms_mean']:>6}/{rec['ms_max']:>6}ms  确定性 {'✓' if rec['deterministic'] else '✗ ' + str(rec['det_maxdiff'])}  框景 {len(rec['framing'])}")
+        print(f"{s['id']:<18} motion {rec['motion_pct']:>5}%  static pairs {rec['still_pairs_pct']:>5}%  jumps {len(spikes)}  camera events {len(cams)}  {rec['ms_mean']:>6}/{rec['ms_max']:>6}ms  deterministic {'✓' if rec['deterministic'] else '✗ ' + str(rec['det_maxdiff'])}  framing {len(rec['framing'])}")
         for r in rec['framing']: print(f"    {r['kind']}  {r['t'][0]:.2f}–{r['t'][1]:.2f}s  {r['text']}")
-    # 转场冒烟：只查能不能渲、耗时多少，不参与运动/流畅判据
+    # Transition smoke test: only checks that it renders and how long it takes; not part of the motion/smoothness criteria
     report['transitions'] = []
     for s in ([] if spec else pg.evaluate('ERAS.map(e => ({id: e.id, t0: e.t0, tr: e.transition ? {type: e.transition.type, dur: e.transition.dur, delay: e.transition.delay || 0} : null}))')):
         if not s['tr'] or (want and s['id'] not in want): continue
@@ -298,29 +298,29 @@ with sync_playwright() as p:
             try:
                 m, *_ = pg.evaluate(GRAB, [s['id'], t, True]); ms_tr.append(m)
             except Exception as ex:
-                errors.append(f"转场 {s['tr']['type']}（进入 {s['id']}）p={p}: {str(ex).splitlines()[0]}")
+                errors.append(f"transition {s['tr']['type']} (entering {s['id']}) p={p}: {str(ex).splitlines()[0]}")
         report['transitions'].append({'id': s['id'], 'type': s['tr']['type'], 'ms_max': round(max(ms_tr), 1) if ms_tr else None})
-    if report['transitions']: print('转场冒烟', len(report['transitions']), '个，最慢', max((r['ms_max'] or 0, r['type']) for r in report['transitions']))
+    if report['transitions']: print('Transition smoke test:', len(report['transitions']), 'transitions, slowest', max((r['ms_max'] or 0, r['type']) for r in report['transitions']))
     br.close()
 srv.shutdown()
 srv.server_close()
 report['page_errors'] = errors
 json.dump(report, open(out / 'qa.json', 'w'), ensure_ascii=False, indent=1)
-rows = ['| 段 | 运动% | 静止帧对% | 跳变 | 镜头事件 | 均/峰 ms | 冷启动 ms | 确定性 | 框景 |', '|---|---|---|---|---|---|---|---|---|']
+rows = ['| Segment | Motion% | Static frame pairs% | Jumps | Camera events | Mean/peak ms | Cold start ms | Deterministic | Framing |', '|---|---|---|---|---|---|---|---|---|']
 for r in report['segments']:
     rows.append(f"| {r['id']} | {r['motion_pct']} | {r['still_pairs_pct']} | {len(r['spikes_at_lt'])} {r['spikes_at_lt'][:3]} | {len(r['camera_events_lt'])} | {r['ms_mean']}/{r['ms_max']} | {r['ms_cold']} | {'✓' if r['deterministic'] else '✗'} | {len(r['framing'])} |")
 fr = [(r['id'], x) for r in report['segments'] for x in r['framing']]
-if fr: rows += ['', '框景线索（全片秒，持续 ≥0.3s；去看这一帧再判断）：'] + [f"- {x['kind']} {x['t'][0]:.2f}–{x['t'][1]:.2f}s（{i}）{x['text']}" for i, x in fr]
-if report.get('transitions'): rows += ['', '转场冒烟（整帧，峰值 ms）：' + '，'.join(f"{r['type']}→{r['id']} {r['ms_max']}" for r in report['transitions'])]
-(out / 'qa.md').write_text('\n'.join(rows) + ('\n\n页面报错：\n' + '\n'.join(errors) if errors else '') + '\n')
+if fr: rows += ['', 'Framing cues (whole-film seconds, persisting ≥0.3s; look at the frame before judging):'] + [f"- {x['kind']} {x['t'][0]:.2f}–{x['t'][1]:.2f}s ({i}) {x['text']}" for i, x in fr]
+if report.get('transitions'): rows += ['', 'Transition smoke test (whole frame, peak ms): ' + ', '.join(f"{r['type']}→{r['id']} {r['ms_max']}" for r in report['transitions'])]
+(out / 'qa.md').write_text('\n'.join(rows) + ('\n\nPage errors:\n' + '\n'.join(errors) if errors else '') + '\n')
 print('->', out / 'qa.md')
-if not spec and root != Path(__file__).resolve().parent / 'engine':   # 回流兜底（11 号第一节）：qa 是交付前必跑的，在这里提醒，不让 qa 失败
+if not spec and root != Path(__file__).resolve().parent / 'engine':   # feedback-loop safety net (doc 12): qa must run before delivery, so the reminder is here, without making qa fail
     import re, time
-    draft = next((d / '经验回流-草稿.md' for d in (root.parent, root.parent.parent) if (d / '经验回流-草稿.md').exists()), None)
-    if not draft: print(f'回流提醒：项目根（{root.parent.name}）还没有 经验回流-草稿.md。每轮改完追加几条，格式见 skill 的 references/11-进化协议.md 第四节。')
+    draft = next((d / 'feedback-draft.md' for d in (root.parent, root.parent.parent) if (d / 'feedback-draft.md').exists()), None)
+    if not draft: print(f'Feedback reminder: the project root ({root.parent.name}) has no feedback-draft.md yet. After each round of changes append a few entries; see references/12-narrated-films-and-feedback-loop.md in the skill.')
     else:
         txt = draft.read_text(); age = (time.time() - draft.stat().st_mtime) / 60
-        tail = txt.rsplit('> 水位线', 1)[-1] if '> 水位线' in txt else txt     # 水位线以下＝还没写回 skill 的
+        tail = txt.rsplit('> watermark', 1)[-1] if '> watermark' in txt else txt     # below the watermark = not yet written back to the skill
         n = len(re.findall(r'^### \[', tail, re.M))
-        print(f'回流提醒：经验回流-草稿.md 最近一次写入在 {age:.0f} 分钟前；还没写回 skill 的有 {n} 条（收活时按 11 号归宿表整合，整合完在草稿末尾加一行「> 水位线 <时间>」）。')
-if errors: raise SystemExit('❌ 页面运行时报错 %d 条，见 qa.md' % len(errors))
+        print(f'Feedback reminder: feedback-draft.md was last written {age:.0f} minutes ago; {n} entries not yet written back to the skill (when wrapping up, integrate them per doc 12, then add a line "> watermark <time>" at the end of the draft).')
+if errors: raise SystemExit('❌ %d runtime page errors, see qa.md' % len(errors))

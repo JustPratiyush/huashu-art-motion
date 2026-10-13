@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""原片 vs 复刻 逐帧并排：给一组时刻，各抽一帧，左原片右复刻，拼成一张图。
-python3 compare.py --a 原片.mp4 --b 复刻.mp4 --times 1.5,1.6 --out 对比.jpg [--w 640]"""
+"""Original vs recreation, frame by frame side by side: given a set of moments, grab one frame from each, original on the left and recreation on the right, assembled into one image.
+python3 compare.py --a original.mp4 --b recreation.mp4 --times 1.5,1.6 --out compare.jpg [--w 640]"""
 import argparse, subprocess, io
 from PIL import Image, ImageDraw
 ap = argparse.ArgumentParser(); ap.add_argument('--a'); ap.add_argument('--b'); ap.add_argument('--times'); ap.add_argument('--out'); ap.add_argument('--w', type=int, default=640); ap.add_argument('--cols', type=int, default=2)
@@ -15,5 +15,5 @@ S = Image.new('RGB', (cols * 2 * w + (cols - 1) * 12, rows * (h + 18)), 'white')
 for i, t in enumerate(ts):
     x = (i % cols) * (2 * w + 12); y = (i // cols) * (h + 18)
     S.paste(grab(a.a, t), (x, y + 18)); S.paste(grab(a.b, t), (x + w, y + 18))
-    d.text((x + 3, y + 3), f'{t:.3f}s  原片 | 复刻', fill='black')
+    d.text((x + 3, y + 3), f'{t:.3f}s  original | recreation', fill='black')
 S.save(a.out, quality=85); print(a.out)

@@ -3,95 +3,136 @@
 # requires-python = ">=3.9"
 # dependencies = []
 # ///
-"""storyboard_lint.py —— 动手写代码之前，机械检查一张镜头表。
+"""storyboard_lint.py — mechanically check a shot list before writing any code.
 
-用法：
-  uv run storyboard_lint.py 镜头表.md [--script 文稿.txt]     # 或 python3 storyboard_lint.py …
+Usage:
+  uv run storyboard_lint.py shot-list.md [--script script.txt]     # or python3 storyboard_lint.py …
 
-镜头表开头先锁画风（表外三行，写在表前）：
-  画风：一句话（一张风格卡或一种画法，全片只用这一种）
-  色板：色板名（paper/poster/ink/navy/bauhaus/snow/wood/chalk，或中文名）或 3–6 个色值
-  角色：无 ／ 只出手和背影 ／ 帧库 <路径>（AI 生帧）
-  允许蓝紫：<理由>（可选，只在用户点名要蓝紫时写）
-然后是一张 markdown 表（模板与示例见 references/镜头表模板.md），每行一镜，列：
-  时间段 ｜ 画面里的物 ｜ 它在做什么 ｜ 镜头 ｜ 屏上字 ｜ 做法（可选，建议写）｜ 标签（可选）
-代码块（```）里的表不检查。文件里有多张表时只查第一张带「物」和「做什么」两列的表。
+The shot list first locks the style (three lines outside the table, written before it):
+  Style: one sentence (one style card or one way of drawing, used for the whole film)
+  Palette: a palette name (paper/poster/ink/navy/bauhaus/snow/wood/chalk) or 3–6 color values
+  Character: none / hands and backs only / frame library <path> (AI-generated frames)
+  Allow blue-purple: <reason> (optional; only when the user explicitly asks for blue-purple)
+Then a markdown table (template and example in references/shot-list-template.md), one row per shot, columns:
+  Time | Object in frame | Action | Camera | On-screen text | Method (optional, recommended) | Tags (optional)
+Tables inside code blocks (```) are not checked. If the file has several tables, only the first one with
+"Object" and "Action" columns is checked.
 
-逐行检查：
-  ① 物：不能空，也不能只是「标题、要点、文字、列表、标签、字幕、卡片、背景、画面、图标」这类词，
-       也不能是空画面「空镜、空景、纯色、黑场、黑屏、全黑、渐变底」                                  → 红
-  ② 做什么：不能空，也不能只是「出现、显示、展示、淡入……」这类万能词                              → 红
-  ③ 屏上字 ≤ 8 字（汉字一字一个，一串英文或数字算一个）                                             → 红
-  ④ 第一镜不能是文字主导（物列是标题/字，或屏上字 ≥ 7 个，或做法是 y5 动态文字）                     → 红
-  ⑥ 单镜 2–6 秒；6–8 秒、短于 2 秒 → 黄；长于 8 秒 → 红；6–8 秒的镜头超过两成 → 红
-  ⑦ 连续三镜「镜头」列相同（「停」「横移」不算）→ 黄
-  ⑮ 连续三镜都在往里推（缓推、慢推、快推、推近、推进、砸入、zoom in 混着也算）→ 黄
-  ⑧ 最后一镜不能是文字主导（居中金句卡、纯字卡；判法同④）                                         → 红
-  ⑪ 中间某镜是带数字的文字主导镜（单独一张数字字卡）                                              → 黄
-  ⑨ 给了 --script：屏上字里的阿拉伯数字（百分数、年份、带单位的数）在文稿里找不到                   → 红
-     （文稿里的中文数字也认：「百分之六十」= 60%、「十五点二倍」= 15.2、「二零二五年」= 2025）
-  ⑩ 有「标签」列时：一镜标签超过 3 个                                                             → 黄
-整表检查：
-  ⑤ 文字主导的镜头占比 ≤ 30%                                                                     → 红
-  做法列（写了才查）：同一个参数化片段（同一个 .json）合计超过 8 秒 → 红；参数化片段语法超过 2 种（拼贴）→ 红
-  ⑫ 画风锁：缺「画风」「色板」「角色」任一行                                                      → 红
-  ⑬ 色板：色值落在蓝紫区（色相 225°–300°、饱和度 ≥0.30）→ 红（写了「允许蓝紫」降黄）；超过 6 色 → 黄
-  ⑭ 角色：角色行写代码画／Q 版小人／机器人 → 红；物列有机器人、小人、火柴人、吉祥物、卡通人而角色不是帧库 → 红；
-       用了 y4 而角色不是帧库 → 红；物列给金币、小球、离子长脸 → 黄
-  ⑯ 重音动作（快推、砸入、甩）超过镜头数的三分之一 → 黄
-  时间段前后接不上、整表没有任何镜头动作（全是停和切）→ 黄
+Per-row checks:
+  ① Object: not empty, not just layout words like "title, bullet points, text, list, labels, subtitles, cards,
+       background, frame, icons", and not an empty frame like "empty shot, empty scene, solid color, black frame,
+       black screen, all black, gradient background"                                                  → red
+  ② Action: not empty, not just catch-all verbs like "appears, shows, displays, fades in…"           → red
+  ③ On-screen text ≤ 8 units (each CJK character counts as one; each English word or number counts as one) → red
+  ④ The first shot can't be text-led (object is a title/text, or ≥ 7 units of on-screen text, or method is y5 kinetic type) → red
+  ⑥ 2–6 seconds per shot; 6–8 seconds or under 2 seconds → yellow; over 8 seconds → red; more than a fifth of shots at 6–8 seconds → red
+  ⑦ Three shots in a row with the same "Camera" value ("hold" and "pan" don't count) → yellow
+  ⑮ Three shots in a row all pushing inward (slow push, fast push, push in, slam in, zoom in, dolly in mixed together count) → yellow
+  ⑧ The last shot can't be text-led (centered quote card, pure text card; judged like ④)          → red
+  ⑪ A text-led shot with a number in the middle of the film (a standalone number card)          → yellow
+  ⑨ With --script: Arabic numerals in on-screen text (percentages, years, numbers with units) not found in the script → red
+     (spelled-out numbers in the script are recognized too: "sixty percent" = 60%, "fifteen point two" = 15.2,
+      "twenty twenty-five" = 2025, "twelve thousand" = 12k)
+  ⑩ With a "Tags" column: more than 3 tags in one shot                                            → yellow
+Whole-table checks:
+  ⑤ Text-led shots ≤ 30%                                                                          → red
+  Method column (checked if present): the same parameterized clip (same .json) totaling over 8 seconds → red;
+       more than 2 clip grammars (a collage) → red
+  ⑫ Style lock: missing any of the "Style", "Palette", "Character" lines                          → red
+  ⑬ Palette: a color value in the blue-purple zone (hue 225°–300°, saturation ≥0.30) → red ("Allow blue-purple" downgrades to yellow);
+       more than 6 colors → yellow
+  ⑭ Character: the character line says code-drawn / chibi figure / robot → red; the object column has robots, little figures,
+       stick figures, mascots or cartoon people while the character isn't a frame library → red;
+       y4 used while the character isn't a frame library → red; coins, balls or ions given faces in the object column → yellow
+  ⑯ Accent moves (fast push, slam in, whip) on more than a third of the shots → yellow
+  Time ranges that don't join, or a whole table with no camera moves at all (all hold and cut) → yellow
 
-退出码：有红灯 1；只有黄灯或全绿 0；读不了文件或找不到表 2。只用标准库。
+Exit codes: 1 with any red light; 0 with only yellow or all green; 2 if the file can't be read or no table is found.
+Standard library only.
 """
 import re
 import sys
 from pathlib import Path
 
-RED, YELLOW, GREEN = "红", "黄", "绿"
+RED, YELLOW, GREEN = "red", "yellow", "green"
 
-# ① 物：去掉这些词、量词、方位词、颜色和标点之后什么都不剩，就算「没写物」。
-ABSTRACT = sorted("""标题 副标题 小标题 大标题 主标题 要点 文字 文本 大字 字 列表 清单 标签 字幕 卡片 字卡 背景 底色 白底 黑底
-纯色 画面 图标 icon 空镜 空景 空画面 空屏 黑场 黑屏 白屏 全黑 全白 暗场 留白 渐变底 渐变 关键词 金句 口号 标语 总结 结论 概念 内容 信息 元素 东西 示意图 示意 图片 图 白板 黑板 页面 版面 动画 效果
-文案 段落 句子 bullet 圆点 符号 编号 序号 箭头 线条 形状 方块 色块 渐变 光斑 粒子 装饰""".split(), key=len, reverse=True)
-FILLER = re.compile(r"[\d一二三四五六七八九十两几个条张行句段组页块排些堆串的和与及跟或上下左右中里边侧旁内外前后大小新白黑红蓝绿黄灰橙紫色底空"
-                    r"、，,。.;；:：/／+＋&＆\s（）()\[\]【】「」『』“”\"'‘’\-—–~～·…|]")
-# ④ 物列里出现这些词，这一镜就算文字主导。
-TEXTY = re.compile(r"标题|文字|文本|要点|列表|清单|字幕|大字|关键词|金句|口号|标语|字卡|bullet|字$|^字")
-# ② 做什么：去掉这些修饰之后只剩万能词，就算「没有动作」。
-WEAK = sorted("""出现 显示 展示 呈现 浮现 淡入 淡出 渐显 弹出 出来 列出 亮起 停留 停住 静止 不动 保持 摆着 放着 存在 显现 罗列 排列 介绍 说明 讲解
-解释 强调 标注 写出 打出 入场 出场""".split(), key=len, reverse=True)
-ACT_FILLER = re.compile(r"[\d一二三四五六七八九十两几个条张行句段组页块排些堆串的地着了过和与及跟或也都再又并、，,。.;；:：/／+＋\s（）()「」“”\"'\-—–~～…|]"
-                        r"|逐条|依次|一一|逐个|逐一|逐渐|渐渐|慢慢|缓缓|然后|开始|同时|接着|陆续|一起|一下|画面|屏幕|上")
-# 镜头列的词表：停／缓推／拉远／横移／快推／砸入／切（甩＝甩镜）。用法与时长见 references/镜头语言.md
-CAM_MOVE = ("缓推", "拉远", "拉开", "横移", "快推", "砸入", "推近", "推", "甩", "移")
-CAM_IN = ("缓推", "快推", "推近", "砸入", "慢推", "推进", "推镜", "推", "zoom in", "zoom-in", "zoomin")
-CAM_ACCENT = ("快推", "砸入", "甩")
-# ① 物列只剩这些词：是空画面，不是版面元素，改法不同
-EMPTY_SCENE = re.compile(r"空镜|空景|空画面|空屏|黑场|黑屏|白屏|全黑|全白|暗场|留白|纯色|渐变|^背景$|^底色$|^[黑白]底$")
-EMPTY_CELL = {"", "-", "—", "–", "无", "空", "（空）", "(空)", "/", "／", "——"}
+
+def words_re(words, plural=True):
+    """A case-insensitive regex matching any of these words/phrases as whole words (optionally plural)."""
+    alts = sorted({w.strip().lower() for w in words.split("|") if w.strip()}, key=len, reverse=True)
+    suffix = r"(?:e?s)?" if plural else ""
+    return re.compile(r"(?<![\w'])(?:" + "|".join(re.escape(a).replace(r"\ ", r"[\s-]+") for a in alts) + ")" + suffix + r"(?![\w])", re.I)
+
+
+# ① Object: if nothing is left after removing these words, quantifiers, positions, colors and punctuation, "no object was written".
+ABSTRACT = words_re("""title|subtitle|subheading|heading|headline|main title|bullet|bullet point|point|key point|text|text card|
+big text|big word|word|wording|list|checklist|label|tag|caption|subtitle|card|background|backdrop|solid color|solid colour|
+frame|picture|image|graphic|icon|empty shot|empty scene|empty frame|empty screen|blank|black frame|black screen|white screen|
+fade to black|negative space|gradient|gradient background|keyword|quote|slogan|tagline|summary|conclusion|concept|content|
+info|information|element|thing|stuff|diagram|illustration|whiteboard|blackboard|page|layout|animation|effect|copy|paragraph|
+sentence|bullet|dot|symbol|numbering|number|arrow|line|shape|block|color block|light spot|particle|decoration|shot|scene|screen|
+slide|visual|item""")
+FILLER = words_re("""a|an|the|this|that|these|those|its|their|his|her|my|our|your|some|several|few|many|lots|of|and|or|with|
+without|plus|on|in|at|to|into|onto|from|for|by|over|under|above|below|beside|next|inside|outside|within|across|around|behind|
+front|back|top|bottom|left|right|middle|center|centre|centered|upper|lower|side|corner|big|small|large|tiny|huge|new|old|
+main|key|first|second|third|last|final|one|two|three|four|five|six|seven|eight|nine|ten|single|empty|plain|solid|all|full|
+white|black|red|blue|green|yellow|gray|grey|orange|purple|pink|brown|dark|light|bright|colored|coloured|color|colour|row|rows|
+column|columns|group|groups|set|sets|piece|pieces|bunch|series|pair|is|are|it""", plural=False)
+NONWORD = re.compile(r"[^a-z\u3400-\u9fff]+")
+# ④ If the object column contains these words, the shot counts as text-led.
+TEXTY = words_re("title|subtitle|headline|heading|text|text card|bullet|bullet point|key point|list|checklist|caption|"
+                 "big word|keyword|quote|slogan|tagline|words")
+# ② Action: if only catch-all verbs remain after removing these modifiers, there's "no action".
+WEAK = words_re("""appear|appears|appeared|appearing|show|shows|shown|showing|showed|display|displays|displayed|displaying|
+present|presents|presented|emerge|emerges|emerged|fade in|fades in|faded in|fade out|fades out|faded out|fade|fades|
+pop up|pops up|popped up|pop in|pops in|pop out|pops out|come out|comes out|list|lists|listed|light up|lights up|lit up|
+stay|stays|remain|remains|stop|stops|hold|holds|still|static|stays still|keep|keeps|sit|sits|sitting|rest|rests|exist|exists|
+is there|be there|introduce|introduces|explain|explains|explained|describe|describes|emphasize|emphasizes|highlight|highlights|
+label|labels|annotate|annotates|write out|writes out|type out|types out|enter|enters|exit|exits|is shown|are shown""", plural=False)
+ACT_FILLER = words_re("""a|an|the|and|or|then|also|again|one|by|in|on|at|to|of|into|onto|from|with|it|its|is|are|be|being|
+get|gets|turn|order|sequence|sequentially|gradually|slowly|quickly|softly|gently|together|simultaneously|start|starts|begin|
+begins|after|another|each|every|other|all|screen|frame|picture|view|on screen|up|out""", plural=False)
+# Camera column vocabulary: hold / slow push / pull out / pan / fast push / slam in / cut (whip = whip pan).
+# Usage and durations are in references/camera-language.md
+CAM_MOVE = ("push", "pull", "pan", "truck", "slide", "glide", "slam", "whip", "zoom", "dolly", "track", "snap", "punch",
+            "move", "tilt", "crane", "orbit", "drift")
+CAM_IN = ("slow push", "fast push", "push in", "push", "slam", "zoom in", "zoom-in", "zoomin", "dolly in", "punch", "snap",
+          "crash zoom")
+CAM_ACCENT = ("fast push", "slam", "whip", "snap", "punch", "crash")
+CAM_REPEAT_OK = ("hold", "pan")
+# ① If the object column contains only these words, it's an empty frame, not a layout element; the fix is different
+EMPTY_SCENE = re.compile(r"empty[\s-]+(?:shot|scene|frame|screen)|\bblank\b|black[\s-]+(?:frame|screen)|white[\s-]+(?:frame|screen)|"
+                         r"\ball[\s-]+(?:black|white)\b|fade[\s-]+to[\s-]+black|solid[\s-]+colou?r|gradient|negative[\s-]+space|"
+                         r"^(?:background|backdrop)$|^(?:black|white|solid|plain)(?:\s+\w+)?\s+(?:background|backdrop)$", re.I)
+EMPTY_CELL = {"", "-", "—", "–", "none", "n/a", "(empty)", "/", "——"}
 GRAMMAR = re.compile(r"\b([ty][1-9])(?:_[a-z_]+)?\b", re.I)
-# ⑫–⑭ 画风锁
-LOCK = re.compile(r"^\s*[-*]?\s*(?:\*\*)?(画风|色板|角色|允许蓝紫)(?:\*\*)?\s*[:：]\s*(.+?)\s*$")
-PALETTES = {"paper", "poster", "ink", "navy", "bauhaus", "snow", "wood", "chalk",
-            "纸本", "海报黄", "深墨", "海军", "包豪斯", "雪原", "暖木", "黑板"}
+# ⑫–⑭ Style lock
+LOCK = re.compile(r"^\s*[-*]?\s*(?:\*\*)?(art style|style|palette|character|allow blue[\s-]purple)(?:\*\*)?\s*[:\uff1a]\s*(.+?)\s*$", re.I)
+LOCK_KEYS = {"art style": "style", "style": "style", "palette": "palette", "character": "character"}
+PALETTES = {"paper", "poster", "ink", "navy", "bauhaus", "snow", "wood", "chalk"}
 HEX = re.compile(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b")
-CHAR_BAD = re.compile(r"代码画|手写|svg|SVG|Q\s*版|q\s*版|小人|机器人|火柴人|卡通人")
-CHAR_FRAMES = re.compile(r"帧库|frames|\.png|/")
-CHAR_NONE = re.compile(r"无|没有|不出人|不出脸|只出手|手|背影|剪影")
-OBJ_CHAR = re.compile(r"机器人|小人|火柴人|吉祥物|卡通人|Q\s*版|q\s*版")
-OBJ_FACE = re.compile(r"(笑脸|表情|长脸|眼睛|五官).{0,6}(金币|硬币|小球|球|离子|电子|粒子|分子)|(金币|硬币|小球|离子|电子|粒子|分子).{0,6}(笑脸|表情|长脸|眼睛|五官)")
+CHAR_BAD = re.compile(r"code[\s-]*drawn|drawn in code|hand[\s-]*coded|\bsvg\b|chibi|little (?:man|men|person|people|figures?)|"
+                      r"stick[\s-]*figures?|robots?|cartoon (?:man|men|person|people|figures?)", re.I)
+CHAR_FRAMES = re.compile(r"frame[\s-]*librar(?:y|ies)|\bframes\b|\.png|\S/\S|\S/$", re.I)
+OBJ_CHAR = re.compile(r"robots?|little (?:man|men|person|people|figures?)|stick[\s-]*figures?|mascots?|"
+                      r"cartoon (?:man|men|person|people|figures?|characters?)|chibi", re.I)
+_THING = r"\b(?:coins?|balls?|ions?|electrons?|particles?|molecules?)\b"
+_FACE = r"\b(?:smil\w*|smiley|faces?|expressions?|eyes|features)\b"
+OBJ_FACE = re.compile(_THING + r".{0,24}" + _FACE + "|" + _FACE + r".{0,24}" + _THING, re.I)
 
 
 def read_lock(text, table_line=None):
-    """表外的画风锁：{画风, 色板, 角色, 允许蓝紫}。代码块里的不算；同一项写了几次，取表前离表最近的那一行（表前没有才看表后）。"""
+    """The style lock outside the table: {style, palette, character, allow_bp}. Lines inside code blocks don't count; if an item
+    is written several times, take the line before the table closest to it (only look after the table if there's none before)."""
     before, after, fence = {}, {}, False
     for i, ln in enumerate(text.splitlines(), 1):
         if ln.strip().startswith("```"):
             fence = not fence; continue
         m = None if fence else LOCK.match(ln)
         if not m: continue
-        if table_line is None or i < table_line: before[m.group(1)] = m.group(2).strip()
-        else: after.setdefault(m.group(1), m.group(2).strip())
+        key = LOCK_KEYS.get(m.group(1).lower(), "allow_bp")
+        if table_line is None or i < table_line: before[key] = m.group(2).strip()
+        else: after.setdefault(key, m.group(2).strip())
     return {**after, **before}
 
 
@@ -105,25 +146,34 @@ def blue_purple_hex(h):
 
 
 def strip_cells(line):
-    s = line.strip().replace("｜", "|")
+    s = line.strip().replace("\uff5c", "|")
     if s.startswith("|"): s = s[1:]
     if s.endswith("|"): s = s[:-1]
     return [c.strip() for c in s.split("|")]
 
 
+def is_object_head(h):
+    return "object" in h.lower()
+
+
+def is_action_head(h):
+    h = h.lower()
+    return "action" in h or "doing" in h
+
+
 def find_table(text):
-    """返回 (表头, 行列表[(行号, 单元格)])。跳过代码块；取第一张同时有「物」和「做什么/动作」列的表。"""
+    """Returns (header, rows[(line number, cells)]). Skips code blocks; takes the first table with both an "Object" and an "Action" column."""
     lines, fence, i = text.splitlines(), False, 0
     while i < len(lines):
         ln = lines[i]
         if ln.strip().startswith("```"):
             fence = not fence; i += 1; continue
-        if not fence and ln.strip().startswith(("|", "｜")) and i + 1 < len(lines) and re.match(r"^\s*[|｜]?\s*:?-{2,}", lines[i + 1]):
+        if not fence and ln.strip().startswith(("|", "\uff5c")) and i + 1 < len(lines) and re.match(r"^\s*[|\uff5c]?\s*:?-{2,}", lines[i + 1]):
             head = strip_cells(ln)
             rows, j = [], i + 2
-            while j < len(lines) and lines[j].strip().startswith(("|", "｜")):
+            while j < len(lines) and lines[j].strip().startswith(("|", "\uff5c")):
                 rows.append((j + 1, strip_cells(lines[j]))); j += 1
-            if any("物" in h for h in head) and any(("做什么" in h or "动作" in h) for h in head):
+            if any(is_object_head(h) for h in head) and any(is_action_head(h) for h in head):
                 return head, rows
             i = j; continue
         i += 1
@@ -133,13 +183,14 @@ def find_table(text):
 def columns(head):
     col = {}
     for k, h in enumerate(head):
-        if "时间" in h and "time" not in col: col["time"] = k
-        elif "物" in h and "obj" not in col: col["obj"] = k
-        elif ("做什么" in h or "动作" in h) and "act" not in col: col["act"] = k
-        elif "镜头" in h and "cam" not in col: col["cam"] = k
-        elif "标签" in h and "tags" not in col: col["tags"] = k
-        elif "字" in h and "text" not in col: col["text"] = k
-        elif "做法" in h and "how" not in col: col["how"] = k
+        hl = h.lower()
+        if "time" in hl and "time" not in col: col["time"] = k
+        elif is_object_head(h) and "obj" not in col: col["obj"] = k
+        elif is_action_head(h) and "act" not in col: col["act"] = k
+        elif "camera" in hl and "cam" not in col: col["cam"] = k
+        elif "tag" in hl and "tags" not in col: col["tags"] = k
+        elif "text" in hl and "text" not in col: col["text"] = k
+        elif ("method" in hl or hl.startswith("how")) and "how" not in col: col["how"] = k
     return col
 
 
@@ -164,96 +215,130 @@ def clean_cell(c):
 
 
 def is_empty(c):
-    return clean_cell(c) in EMPTY_CELL
+    return clean_cell(c).lower() in EMPTY_CELL
 
 
 def obj_residue(obj):
-    s = clean_cell(obj).lower()
-    for w in ABSTRACT: s = s.replace(w.lower(), "")
-    return FILLER.sub("", s)
+    s = clean_cell(obj).lower().replace("'s", " ")
+    s = ABSTRACT.sub(" ", s)
+    s = FILLER.sub(" ", s)
+    return NONWORD.sub("", s)
 
 
 def act_residue(act, obj=""):
-    """去掉万能词、版面词和物列里的名词之后还剩什么。「要点逐条出现」「孢子出现」都剩不下东西。"""
-    s = clean_cell(act).lower()
-    for w in sorted((t for t in FILLER.split(clean_cell(obj).lower()) if len(t) >= 2), key=len, reverse=True): s = s.replace(w, "")
-    for w in WEAK + ABSTRACT: s = s.replace(w.lower(), "")
-    return ACT_FILLER.sub("", s)
+    """What's left after removing catch-all verbs, layout words and the nouns from the object column.
+    "points appear one by one" and "the spore appears" both leave nothing."""
+    s = " " + clean_cell(act).lower().replace("'s", " ") + " "
+    for w in sorted({t for t in re.findall(r"[a-z]{3,}", clean_cell(obj).lower())}, key=len, reverse=True):
+        s = re.sub(r"(?<![a-z])" + re.escape(w) + r"(?:e?s)?(?![a-z])", " ", s)
+    s = WEAK.sub(" ", s)
+    s = ABSTRACT.sub(" ", s)
+    s = ACT_FILLER.sub(" ", s)
+    return NONWORD.sub("", s)
 
 
 def text_len(t):
     t = clean_cell(t)
-    if t in EMPTY_CELL: return 0
-    t = re.sub(r"[「」『』“”\"'‘’《》]", "", t)
-    return len(re.findall(r"[㐀-鿿]|[A-Za-z0-9][A-Za-z0-9.%°'’]*", t))
+    if t.lower() in EMPTY_CELL: return 0
+    t = re.sub(r"[\"'‘’“”\u300c\u300d\u300e\u300f\u300a\u300b]", "", t)
+    return len(re.findall(r"[\u3400-\u9fff]|[A-Za-z0-9][A-Za-z0-9.%°'’]*", t))
 
 
 def how_kind(how):
-    """做法列 → 画面做法的种类：语法编号（t1…y6）、scenes、素材，其它按原文。"""
+    """Method column → kind of visual method: grammar code (t1…y6), scenes, footage, otherwise the raw text."""
     h = clean_cell(how)
-    if h in EMPTY_CELL: return None
+    if h.lower() in EMPTY_CELL: return None
     m = GRAMMAR.search(h)
     if m: return m.group(1).lower()
-    if re.search(r"scenes?|\.js\b|代码画", h, re.I): return "scenes"
-    if re.search(r"素材|截图|照片|录像|实拍|原图|原文|录屏", h): return "素材"
+    if re.search(r"scenes?|\.js\b|drawn in code|code[\s-]*drawn", h, re.I): return "scenes"
+    if re.search(r"footage|screenshot|photo|video|recording|live|original|screen[\s-]*rec|stock|archive", h, re.I): return "footage"
     return h
 
 
 def clip_name(how):
-    m = re.search(r"[^\s|，,：:（）()]+\.json", clean_cell(how))
+    m = re.search(r"[^\s|,:()]+\.json", clean_cell(how))
     return m.group(0) if m else None
 
 
 def tag_count(cell):
-    """标签列：按顿号、逗号、斜杠、间隔号拆；一个分隔符都没有就按空格拆。"""
+    """Tags column: split on commas, slashes, semicolons, middle dots; if there's no separator at all, split on spaces."""
     c = clean_cell(cell)
-    if c in EMPTY_CELL: return 0
-    parts = [x for x in re.split(r"[、，,／/;；·•|]+", c) if x.strip()]
+    if c.lower() in EMPTY_CELL: return 0
+    parts = [x for x in re.split(r"[,\u3001\uff0c/\uff0f;\uff1b·•|]+", c) if x.strip()]
     if len(parts) <= 1: parts = c.split()
     return len(parts)
 
 
-# ⑨ 数字：屏上只认阿拉伯数字（中文「一」到处都是，当数字查会误报）；文稿两种都认，宁可放过不冤枉。
-CN_DIGIT = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-CN_UNIT = {"十": 10, "百": 100, "千": 1000}
-CN_BIG = {"万": 10 ** 4, "亿": 10 ** 8}
+# ⑨ Numbers: on screen only Arabic numerals count; in the script both numerals and spelled-out English number words count
+# (better to let a few slip through than to accuse wrongly).
+SMALL = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+                                     "fifteen sixteen seventeen eighteen nineteen".split())}
+TENS = {w: 10 * (i + 2) for i, w in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split())}
+SCALES = {"thousand": 10 ** 3, "million": 10 ** 6, "billion": 10 ** 9, "trillion": 10 ** 12}
+NUMWORDS = set(SMALL) | set(TENS) | set(SCALES) | {"hundred"}
 ARABIC = re.compile(r"\d+(?:,\d{3})*(?:\.\d+)?")
-CN_NUM = re.compile(r"[零〇一二两三四五六七八九十百千万亿]+(?:点[零〇一二三四五六七八九]+)?")
 SRT_NOISE = re.compile(r"\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}|^\s*\d+\s*$", re.M)
+SCALE_SUFFIX = re.compile(r"\s*(thousand|million|billion|trillion|bn\b|[kK]\b|[mM]\b|B\b)")
+SUFFIX_EXP = {"thousand": 3, "million": 6, "billion": 9, "trillion": 12, "bn": 9, "k": 3, "K": 3, "m": 6, "M": 6, "B": 9}
 
 
-def cn_ints(s):
-    """中文整数，可能有两种读法：「三百一十八」→ 318，「二零二五」→ 2025（逐位念），「一千二」→ 1200 和 1002。"""
-    if not s: return set()
-    if all(ch in CN_DIGIT for ch in s):
-        return {int("".join(str(CN_DIGIT[ch]) for ch in s))}
-    total, sect, num, last = 0, 0, None, None
-    for ch in s:
-        if ch in CN_DIGIT: num = CN_DIGIT[ch]
-        elif ch in CN_UNIT: sect += (1 if num is None else num) * CN_UNIT[ch]; num, last = None, CN_UNIT[ch]
-        elif ch in CN_BIG: total += (sect + (num or 0)) * CN_BIG[ch]; sect, num, last = 0, None, CN_BIG[ch]
+def en_ints(toks):
+    """Spelled-out English integer; may have two readings: "three hundred eighteen" → 318,
+    "twenty twenty-five" → 2025 (read as two pairs), "two zero two five" → 2025 (digit by digit)."""
+    toks = [t for t in toks if t != "and"]
+    if not toks: return set()
+    if len(toks) > 1 and all(t in SMALL and SMALL[t] < 10 for t in toks):
+        return {int("".join(str(SMALL[t]) for t in toks))}
+    total, cur = 0, 0
+    for t in toks:
+        if t in SMALL: cur += SMALL[t]
+        elif t in TENS: cur += TENS[t]
+        elif t == "hundred": cur = (cur or 1) * 100
+        elif t in SCALES: total += (cur or 1) * SCALES[t]; cur = 0
         else: return set()
-    out = {total + sect + (num or 0)}
-    if num is not None and last and last > 10 and s[-2] not in "零〇":         # 一千二 = 1200，三万五 = 35000
-        out.add(total + sect + num * last // 10)
+    out = {total + cur}
+    if not any(t == "hundred" or t in SCALES for t in toks):        # years: "nineteen eighty-four", "twenty twenty-five"
+        groups, k = [], 0
+        while k < len(toks):
+            t = toks[k]
+            if t in TENS and k + 1 < len(toks) and toks[k + 1] in SMALL and 0 < SMALL[toks[k + 1]] < 10:
+                groups.append(TENS[t] + SMALL[toks[k + 1]]); k += 2
+            else:
+                groups.append(TENS.get(t, SMALL.get(t, 0))); k += 1
+        if len(groups) == 2 and groups[0] >= 10:
+            out.add(groups[0] * 100 + groups[1])
     return out
 
 
-def cn_values(tok):
-    """中文数 → [(值, 小数位)]。"""
-    a, _, b = tok.partition("点")
-    ints = cn_ints(a) if a else {0}
-    if not b: return [(float(i), 0) for i in ints]
-    frac = "".join(str(CN_DIGIT[ch]) for ch in b)
-    return [(float(f"{i}.{frac}"), len(frac)) for i in ints]
+def en_values(toks):
+    """Spelled-out English number → [(value, decimal places)]."""
+    while toks and toks[-1] in ("and", "point"): toks = toks[:-1]
+    if "point" in toks:
+        k = toks.index("point")
+        a, b = toks[:k], toks[k + 1:]
+    else:
+        a, b = toks, []
+    ints = en_ints(a) if a else {0}
+    digits, k = [], 0
+    while k < len(b) and b[k] in SMALL and SMALL[b[k]] < 10:
+        digits.append(SMALL[b[k]]); k += 1
+    if not digits: return [(float(i), 0) for i in ints]
+    frac = "".join(map(str, digits))
+    out = [(float(f"{i}.{frac}"), len(frac)) for i in ints]
+    scale = next((SCALES[t] for t in b[k:] if t in SCALES), None)         # "one point two million"
+    if scale:
+        exp = len(str(scale)) - 1
+        out += [(v * scale, d - exp) for v, d in out]
+    return out
 
 
 def scaled(v, dec, after):
-    """数字后面紧跟「万／亿／k／M」：既认写出来的数，也认乘出来的数（屏上 1.2 万 = 文稿一万两千）。返回 [(值, 小数位)]。"""
+    """A number followed directly by "thousand / million / k / M": accept both the number as written and the multiplied value
+    (on screen 1.2M = in the script "one point two million"). Returns [(value, decimal places)]."""
     out = [(v, dec)]
-    m = re.match(r"\s*(万|亿|[kK]|[mM](?![a-zA-Z]))", after)
+    m = SCALE_SUFFIX.match(after)
     if m:
-        k = {"万": 4, "亿": 8, "k": 3, "K": 3, "m": 6, "M": 6}[m.group(1)]
+        k = SUFFIX_EXP[m.group(1)]
         out.append((v * 10 ** k, dec - k))
     return out
 
@@ -264,21 +349,33 @@ def arabic(tok):
 
 
 def screen_numbers(text):
-    """屏上字里的数：[(原文, [(值, 小数位)])]。"""
+    """Numbers in on-screen text: [(original, [(value, decimal places)])]."""
     t = clean_cell(text)
     return [(m.group(0), scaled(*arabic(m.group(0)), t[m.end():])) for m in ARABIC.finditer(t)]
 
 
 def script_numbers(script):
-    """文稿里念到的数：[(值, 容差)]。容差按文稿那个数的精度：念「十五倍」，屏上 15.2 也算对上；念「十五点二」，屏上就得是 15.2。"""
+    """Numbers spoken in the script: [(value, tolerance)]. Tolerance follows that number's precision in the script: if the script
+    says "fifteen times", 15.2 on screen still matches; if it says "fifteen point two", the screen must say 15.2."""
     s = SRT_NOISE.sub(" ", script)
     have = []
     for m in ARABIC.finditer(s):
         have += scaled(*arabic(m.group(0)), s[m.end():])
-    for m in CN_NUM.finditer(s):
-        for v, d in cn_values(m.group(0)):
-            have += scaled(v, d, s[m.end():])
-            if s[m.end():m.end() + 1] == "成": have.append((v * 10, d - 1))     # 六成 = 60%
+    toks = [(w.group(0).lower(), w.start(), w.end()) for w in re.finditer(r"[A-Za-z]+", s)]
+    joined = lambda a, b: re.fullmatch(r"[\s-]*", s[toks[a][2]:toks[b][1]]) is not None    # a run stops at punctuation
+    k = 0
+    while k < len(toks):
+        if toks[k][0] not in NUMWORDS:
+            k += 1; continue
+        j = k + 1
+        while j < len(toks) and joined(j - 1, j) and (toks[j][0] in NUMWORDS or (
+                toks[j][0] in ("and", "point") and j + 1 < len(toks) and joined(j, j + 1) and toks[j + 1][0] in NUMWORDS)):
+            j += 1
+        run = [t for t, _, _ in toks[k:j]]
+        end = toks[j - 1][2]
+        for v, d in en_values(run):
+            have += scaled(v, d, s[end:])
+        k = j
     return {(round(v, 6), 0.5 * 10.0 ** -d + 1e-9) for v, d in have}
 
 
@@ -287,14 +384,17 @@ def number_in(vals, have):
 
 
 def lint(text, script=None):
-    """返回 dict：rows（逐行结果）、table（整表结果）、verdict、summary。script：口播文稿全文（可选），给了才查⑨。"""
+    """Returns a dict: rows (per-row results), table (whole-table results), verdict, summary.
+    script: the full narration script (optional); ⑨ is checked only when it's given."""
     head, raw = find_table(text)
     if head is None:
-        return {"error": "找不到镜头表：要一张 markdown 表，表头至少有「画面里的物」和「它在做什么」两列（代码块里的表不算）。"}
+        return {"error": "No shot list found: it needs a markdown table whose header has at least the columns "
+                         "\"Object in frame\" and \"Action\" (tables inside code blocks don't count)."}
     col = columns(head)
-    miss = [n for k, n in (("time", "时间段"), ("obj", "画面里的物"), ("act", "它在做什么"), ("cam", "镜头"), ("text", "屏上字")) if k not in col]
+    miss = [n for k, n in (("time", "Time"), ("obj", "Object in frame"), ("act", "Action"), ("cam", "Camera"), ("text", "On-screen text")) if k not in col]
     if miss:
-        return {"error": "镜头表缺列：" + "、".join(miss) + "。列：时间段｜画面里的物｜它在做什么｜镜头｜屏上字｜做法。"}
+        return {"error": "The shot list is missing columns: " + ", ".join(miss) +
+                         ". Columns: Time | Object in frame | Action | Camera | On-screen text | Method."}
     get = lambda cells, k: cells[col[k]] if k in col and col[k] < len(cells) else ""
     rows, table = [], []
     for n, (lineno, cells) in enumerate(raw, 1):
@@ -306,92 +406,110 @@ def lint(text, script=None):
              "chars": text_len(txt), "issues": []}
         bad = r["issues"].append
         if is_empty(obj):
-            bad((RED, "①物", "物列空着", "写一个画面里能指着说「就是它」的东西：一个人、一只手、一台机器、一件具体的东西"))
+            bad((RED, "①object", "The object column is empty",
+                 "write something on screen you can point at and say \"that's it\": a person, a hand, a machine, a specific thing"))
         elif not obj_residue(obj) and EMPTY_SCENE.search(clean_cell(obj)):
-            bad((RED, "①物", f"「{r['obj']}」是空画面（空景、纯色、黑场），主角不在画里", "这一镜也要有主角或主物在做事；想留口气就让主物停住、拉远，别把它撤掉"))
+            bad((RED, "①object", f"\"{r['obj']}\" is an empty frame (empty scene, solid color, black): the protagonist isn't in the picture",
+                 "this shot also needs the protagonist or main object doing something; for a breather, let the main object hold still or pull out, don't remove it"))
         elif not obj_residue(obj):
-            bad((RED, "①物", f"「{r['obj']}」不是物，是版面元素", "要点背后一定有一个东西在做事，把它画出来：「三个原因」→ 三个具体的东西各占一镜、各做一件事"))
+            bad((RED, "①object", f"\"{r['obj']}\" is not an object, it's a layout element",
+                 "behind every bullet point there's a thing doing something — draw it: \"three reasons\" → three concrete things, one shot each, each doing one thing"))
         if is_empty(act):
-            bad((RED, "②做什么", "做什么列空着", "写一个动词：掉下来、裂开、钻进去、被切掉"))
+            bad((RED, "②action", "The action column is empty", "write a verb: falls, splits open, burrows in, gets cut off"))
         elif not act_residue(act, obj):
-            bad((RED, "②做什么", f"「{r['act']}」只是出现/显示，没有动作", "写这个物自己的动作：它从哪来、往哪去、撞上了什么、变成了什么"))
+            bad((RED, "②action", f"\"{r['act']}\" only appears/shows; there's no action",
+                 "write the object's own action: where it comes from, where it goes, what it hits, what it turns into"))
         if r["chars"] > 8:
-            bad((RED, "③屏上字", f"屏上字 {r['chars']} 个，超过 8", "只留一个词或半句，其余交给口播或字幕"))
+            bad((RED, "③on-screen text", f"{r['chars']} units of on-screen text, more than 8",
+                 "keep just one word or half a sentence; leave the rest to the narration or subtitles"))
         r["texty"] = bool(TEXTY.search(r["obj"])) or r["chars"] >= 7 or how_kind(how) == "y5"
         if span is None:
-            bad((RED, "⑥时长", f"时间段「{clean_cell(get(cells, 'time'))}」读不出来", "写成 0–3 或 0:03–0:07"))
+            bad((RED, "⑥duration", f"Can't read the time range \"{clean_cell(get(cells, 'time'))}\"", "write it as 0–3 or 0:03–0:07"))
         elif r["dur"] > 8:
-            bad((RED, "⑥时长", f"这一镜 {r['dur']:g} 秒，超过 8 秒", "拆成两三镜，每镜 2–6 秒，换一个画面或换一个镜头动作"))
+            bad((RED, "⑥duration", f"This shot is {r['dur']:g} seconds, over 8 seconds",
+                 "split it into two or three shots of 2–6 seconds each, changing the picture or the camera move"))
         elif r["dur"] > 6:
-            bad((YELLOW, "⑥时长", f"这一镜 {r['dur']:g} 秒（6–8 秒只允许个别）", "能拆就拆；不拆就让这一镜里发生一件新事：物的下一个动作、横移到下一件、拉远看全貌"))
+            bad((YELLOW, "⑥duration", f"This shot is {r['dur']:g} seconds (6–8 seconds only occasionally)",
+                 "split it if you can; if not, make something new happen in it: the object's next action, a pan to the next piece, a pull-out to the whole"))
         elif r["dur"] < 2:
-            bad((YELLOW, "⑥时长", f"这一镜只有 {r['dur']:g} 秒", "插入镜可以短，口播在这里念不完一句就并到相邻一镜"))
+            bad((YELLOW, "⑥duration", f"This shot is only {r['dur']:g} seconds",
+                 "insert shots can be short; if the narration can't finish a sentence here, merge it into a neighboring shot"))
         if is_empty(cam):
-            bad((YELLOW, "镜头", "镜头列空着", "写一个：停／缓推／拉远／横移／快推／砸入／切"))
+            bad((YELLOW, "camera", "The camera column is empty", "write one: hold / slow push / pull out / pan / fast push / slam in / cut"))
         if "tags" in col:
             r["tags"] = tag_count(get(cells, "tags"))
             if r["tags"] > 3:
-                bad((YELLOW, "⑩标签", f"这一镜有 {r['tags']} 个标签，挤在一起", "一镜最多 3 个，多的交给口播或拆到下一镜；标签贴在它指的那个物旁边，别做成一排发光胶囊"))
+                bad((YELLOW, "⑩tags", f"This shot has {r['tags']} tags crowded together",
+                     "at most 3 per shot; leave the rest to the narration or move them to the next shot; attach tags beside the object they point at, not as a row of glowing capsules"))
         rows.append(r)
     if not rows:
-        return {"error": "镜头表是空的：表头下面一行一镜。"}
+        return {"error": "The shot list is empty: one shot per row under the header."}
 
-    # ④ 第一镜
+    # ④ The first shot
     f = rows[0]
     if f["texty"]:
-        f["issues"].append((RED, "④开头", "第一镜是文字主导（标题/字）", "开头 3 秒换成一个具体的小场景：一个人或一个物在做一件和题目有关的事，标题晚一镜再给或不给"))
+        f["issues"].append((RED, "④opening", "The first shot is text-led (a title/text)",
+                            "replace the first 3 seconds with a concrete little scene: a person or object doing something related to the topic; give the title one shot later, or not at all"))
     elif f["chars"] >= 4:
-        f["issues"].append((YELLOW, "④开头", f"第一镜屏上就有 {f['chars']} 个字", "开场先让画面讲，字留到第二镜"))
-    # ⑧ 最后一镜
+        f["issues"].append((YELLOW, "④opening", f"The first shot already has {f['chars']} units of on-screen text",
+                            "let the picture speak at the opening; save the text for the second shot"))
+    # ⑧ The last shot
     z = rows[-1]
     if len(rows) > 1 and z["texty"]:
-        z["issues"].append((RED, "⑧结尾", "最后一镜是文字主导（居中金句卡/纯字卡）",
-                            "结尾落回主角或主物身上做一个动作：放进口袋、合上书、拉远看全貌；字可以写在画里的物上，不要单独一张字卡"))
-    # ⑪ 中间的数字字卡：数字单独起一张纯色字卡，盲评里反复被读成「插了一页 PPT」
+        z["issues"].append((RED, "⑧ending", "The last shot is text-led (a centered quote card / pure text card)",
+                            "end on an action by the protagonist or main object: putting it in a pocket, closing the book, pulling out to see the whole; text can be written on an object in the picture, not on a separate text card"))
+    # ⑪ Number cards in the middle: a number on its own solid-color text card is read in blind reviews as "a PowerPoint page inserted"
     for r in rows[1:-1]:
         if r["texty"] and screen_numbers(r["text"]):
-            r["issues"].append((YELLOW, "⑪数字字卡", "这一镜是一张单独的数字字卡",
-                                "把数字砸在世界里的物上：手机屏幕、电量条、价签、黑板、纸上；不单独起一张纯色底的大字卡"))
-    # ⑨ 屏上数字对文稿
+            r["issues"].append((YELLOW, "⑪number card", "This shot is a standalone number card",
+                                "slam the number onto an object in the world: a phone screen, a battery bar, a price tag, a blackboard, a sheet of paper; don't give it its own solid-color big-text card"))
+    # ⑨ On-screen numbers against the script
     if script is not None:
         have = script_numbers(script)
         for r in rows:
             miss = [tok for tok, vals in screen_numbers(r["text"]) if not number_in(vals, have)]
             if miss:
-                r["issues"].append((RED, "⑨数字", f"屏上数字「{'」「'.join(miss)}」在文稿里找不到，屏上数字和口播不一致",
-                                    "核对数据来源，把屏上字改成口播里念的那个数（或者改口播），两边必须是同一个数"))
-    # ⑦ 连续三镜镜头相同
+                quoted = ", ".join(f'"{m}"' for m in miss)
+                r["issues"].append((RED, "⑨numbers", f"On-screen number(s) {quoted} not found in the script: the on-screen number and the narration don't match",
+                                    "check the data source and change the on-screen text to the number spoken in the narration (or change the narration); both must be the same number"))
+    # ⑦ Three shots in a row with the same camera move
     for k in range(2, len(rows)):
-        c = rows[k]["cam"]
-        if c and not is_empty(c) and c not in ("停", "横移") and c == rows[k - 1]["cam"] == rows[k - 2]["cam"]:   # 停可以连着；调查桌上一件件横移过去也是正常写法
-            alt = "／".join(w for w in ("停", "缓推", "拉远", "横移", "切") if w != c)
-            rows[k]["issues"].append((YELLOW, "⑦镜头", f"连续三镜都是「{c}」", f"中间那镜换一个动作：{alt}，按这一镜要观众看什么来选"))
-    # ⑮ 连续三镜都往里推：每镜都推一次，整片就成了一推一推的 zoom in（2026-10-12 诺奖短片 102 秒推近约 48 次，被判「太多、太快、不 smooth」）
-    inward = [any(w in r["cam"].lower() for w in CAM_IN) and "拉" not in r["cam"] and "out" not in r["cam"].lower() for r in rows]
+        c = rows[k]["cam"].lower()
+        if c and not is_empty(c) and c not in CAM_REPEAT_OK and c == rows[k - 1]["cam"].lower() == rows[k - 2]["cam"].lower():
+            # holds can repeat; panning piece by piece across an investigation desk is a normal way to write it too
+            alt = " / ".join(w for w in ("hold", "slow push", "pull out", "pan", "cut") if w != c)
+            rows[k]["issues"].append((YELLOW, "⑦camera", f"Three shots in a row are all \"{rows[k]['cam']}\"",
+                                      f"change the middle shot's move to one of: {alt}, chosen by what you want the audience to look at in that shot"))
+    # ⑮ Three shots in a row all pushing inward: a push on every shot turns the whole film into one zoom-in after another
+    # (on 2026-10-12 a 102-second Nobel short pushed in about 48 times and was judged "too many, too fast, not smooth")
+    inward = [any(w in r["cam"].lower() for w in CAM_IN) and "pull" not in r["cam"].lower() and "out" not in r["cam"].lower() for r in rows]
     for k in range(2, len(rows)):
-        if inward[k] and inward[k - 1] and inward[k - 2] and not any(i[1] == "⑦镜头" for i in rows[k]["issues"]):
-            rows[k]["issues"].append((YELLOW, "⑮推近", "连续三镜都在往里推", "推进去之后要有来有回：中间换成停、拉远、横移，或硬切换个景别；实拍录像本身在动就停住"))
-    # 时间段接续
+        if inward[k] and inward[k - 1] and inward[k - 2] and not any(i[1] == "⑦camera" for i in rows[k]["issues"]):
+            rows[k]["issues"].append((YELLOW, "⑮push-in", "Three shots in a row are all pushing inward",
+                                      "after pushing in, give and take: switch the middle one to hold, pull out or pan, or hard-cut to a different shot size; if live footage is moving on its own, hold"))
+    # Time ranges joining up
     for k in range(1, len(rows)):
         a, b = rows[k - 1]["span"], rows[k]["span"]
         if a and b and abs(b[0] - a[1]) > 0.05:
-            rows[k]["issues"].append((YELLOW, "时间段", f"上一镜到 {a[1]:g}s 结束，这一镜从 {b[0]:g}s 开始", "前后接上，或写明这里有空镜"))
+            rows[k]["issues"].append((YELLOW, "time", f"The previous shot ends at {a[1]:g}s but this one starts at {b[0]:g}s",
+                                      "make them join, or state that there's an empty shot here"))
 
     n = len(rows)
     texty = [r["n"] for r in rows if r["texty"]]
     if len(texty) / n > 0.30:
-        table.append((RED, "⑤文字占比", f"文字主导的镜头 {len(texty)}/{n}（{len(texty) / n:.0%}），超过 30%：第 {'、'.join(map(str, texty))} 镜",
-                      "挑其中一半，把字换成一个物在做事；字交给口播和字幕"))
+        table.append((RED, "⑤text share", f"Text-led shots {len(texty)}/{n} ({len(texty) / n:.0%}), over 30%: shots {', '.join(map(str, texty))}",
+                      "pick half of them and replace the text with an object doing something; leave the words to the narration and subtitles"))
     long_ = [r["n"] for r in rows if r["dur"] and 6 < r["dur"] <= 8]
     if len(long_) > max(1, n // 5):
-        table.append((RED, "⑥时长", f"6–8 秒的镜头有 {len(long_)} 个（第 {'、'.join(map(str, long_))} 镜），只允许个别",
-                      "拆开，每镜 2–6 秒"))
-    if not any(any(w in r["cam"] for w in CAM_MOVE) for r in rows):
-        table.append((YELLOW, "镜头", "整表没有任何镜头动作，全是停和切", "交付门禁量的是镜头内运动，全停多半红灯；在要带观众视线的地方放缓推、横移或拉远（物自己的动作也算运动）"))
-    acc = [r["n"] for r in rows if any(w in r["cam"] for w in CAM_ACCENT)]
+        table.append((RED, "⑥duration", f"{len(long_)} shots are 6–8 seconds (shots {', '.join(map(str, long_))}); only occasional ones are allowed",
+                      "split them, 2–6 seconds per shot"))
+    if not any(any(w in r["cam"].lower() for w in CAM_MOVE) for r in rows):
+        table.append((YELLOW, "camera", "The whole table has no camera moves at all, only holds and cuts",
+                      "the delivery gate measures in-shot motion, and all holds is usually a red light; put slow pushes, pans or pull-outs where you lead the audience's eye (the object's own action counts as motion too)"))
+    acc = [r["n"] for r in rows if any(w in r["cam"].lower() for w in CAM_ACCENT)]
     if n >= 6 and len(acc) * 3 > n:
-        table.append((YELLOW, "⑯重音", f"快推／砸入／甩用了 {len(acc)}/{n} 镜（第 {'、'.join(map(str, acc))} 镜），重音太多就没有重音",
-                      "只留给揭晓、反转、关键数字那几下；其余改成缓推、横移、拉远或停"))
+        table.append((YELLOW, "⑯accents", f"Fast push / slam in / whip used on {len(acc)}/{n} shots (shots {', '.join(map(str, acc))}); with too many accents nothing is accented",
+                      "keep them only for reveals, twists and key numbers; change the rest to slow pushes, pans, pull-outs or holds"))
     total = sum(r["dur"] or 0 for r in rows)
     if "how" in col:
         clips = {}
@@ -401,48 +519,57 @@ def lint(text, script=None):
         for c, rs in clips.items():
             s = sum(r["dur"] or 0 for r in rs)
             if s > 8:
-                table.append((RED, "做法", f"参数化片段 {c} 撑了 {s:g} 秒（第 {'、'.join(str(r['n']) for r in rs)} 镜）",
-                              "单个参数化片段最多 8 秒，撑久了读成一页 PPT；拆成几个 spec，中间换别的做法"))
+                table.append((RED, "method", f"Parameterized clip {c} carries {s:g} seconds (shots {', '.join(str(r['n']) for r in rs)})",
+                              "a single parameterized clip carries at most 8 seconds; stretched longer it reads as a PowerPoint page; split it into several specs with other methods in between"))
         grams = sorted({k for k in (how_kind(r["how"]) for r in rows) if k and GRAMMAR.fullmatch(k)})
         if len(grams) > 2:
-            table.append((RED, "做法", f"用了 {len(grams)} 种片段语法（{'、'.join(grams)}），拼起来是几种画风",
-                          "一支片最多 2 种片段语法，所有 spec 写同一个 theme；其余镜头用 scenes 按同一套色板画，或真实素材满幅"))
+            table.append((RED, "method", f"Uses {len(grams)} clip grammars ({', '.join(grams)}); joined together that's several art styles",
+                          "at most 2 clip grammars per film, all specs with the same theme; draw the other shots as scenes in the same palette, or use real footage full-frame"))
         empty_how = [r["n"] for r in rows if how_kind(r["how"]) is None]
         if empty_how:
-            table.append((YELLOW, "做法", f"第 {'、'.join(map(str, empty_how))} 镜没写做法", "写上用哪个语法的片段（镜NN.json）、scenes/<id>.js 还是素材"))
+            table.append((YELLOW, "method", f"Shots {', '.join(map(str, empty_how))} have no method",
+                          "write which grammar's clip (shotNN.json), scenes/<id>.js, or footage"))
     else:
-        table.append((YELLOW, "做法", "没有「做法」列，查不了单个片段撑多久、用了几种语法", "加一列：y2 片段 镜01.json／scenes/<id>.js／素材 照片"))
+        table.append((YELLOW, "method", "No \"Method\" column, so it can't check how long a single clip runs or how many grammars are used",
+                      "add a column: y2 clip shot01.json / scenes/<id>.js / footage photo"))
 
-    # ⑫–⑭ 画风锁：整片一套视觉语言、配色不落蓝紫、角色要么精细要么不出脸
+    # ⑫–⑭ Style lock: one visual language for the whole film, no blue-purple colors, characters either detailed or faceless
     lock = read_lock(text, raw[0][0] - 2 if raw else None)
-    miss = [k for k in ("画风", "色板", "角色") if not lock.get(k)]
+    miss = [name for key, name in (("style", "Style"), ("palette", "Palette"), ("character", "Character")) if not lock.get(key)]
     if miss:
-        table.append((RED, "⑫画风锁", f"表前缺「{'」「'.join(miss)}」", "表前写三行——画风：一句话，全片只用这一种；色板：色板名或 3–6 个色值（references/色板.md）；"
-                      "角色：无／只出手和背影／帧库 <路径>（references/角色精细度.md）"))
-    pal = lock.get("色板", "")
+        quoted = ", ".join(f'"{m}"' for m in miss)
+        table.append((RED, "⑫style lock", f"Missing {quoted} before the table",
+                      "write three lines before the table — Style: one sentence, only this one for the whole film; Palette: a palette name or 3–6 color values (references/palettes.md); "
+                      "Character: none / hands and backs only / frame library <path> (references/character-detail.md)"))
+    pal = lock.get("palette", "")
     if pal:
         hexes = HEX.findall(pal)
-        named = any(n in pal for n in PALETTES)
+        named = any(re.search(r"\b" + p + r"\b", pal, re.I) for p in PALETTES)
         bp = [f"#{h}" for h in hexes if blue_purple_hex(h)]
         if bp:
-            table.append((YELLOW if lock.get("允许蓝紫") else RED, "⑬色板", f"色板里有蓝紫：{'、'.join(bp)}" + ("（已写允许蓝紫的理由）" if lock.get("允许蓝紫") else ""),
-                          "换成 references/色板.md 里的一套，或把这几个色挪出色相 225°–300°；用户点名要蓝紫才写「允许蓝紫：理由」"))
+            table.append((YELLOW if lock.get("allow_bp") else RED, "⑬palette",
+                          f"The palette has blue-purple: {', '.join(bp)}" + (" (a reason for allowing blue-purple is given)" if lock.get("allow_bp") else ""),
+                          "switch to a set from references/palettes.md, or move these colors out of hue 225°–300°; only write \"Allow blue-purple: reason\" when the user explicitly asks for blue-purple"))
         if len(hexes) > 6:
-            table.append((YELLOW, "⑬色板", f"色板有 {len(hexes)} 个色", "一支片 3–6 个色：底、面、主字、次字、一两个强调色"))
+            table.append((YELLOW, "⑬palette", f"The palette has {len(hexes)} colors", "3–6 colors per film: background, surface, main text, secondary text, one or two accents"))
         if not hexes and not named:
-            table.append((YELLOW, "⑬色板", f"色板「{pal}」不是色板名也没写色值", "写 references/色板.md 里的名字，或 3–6 个 #色值"))
-    ch = lock.get("角色", "")
+            table.append((YELLOW, "⑬palette", f"Palette \"{pal}\" is neither a palette name nor color values",
+                          "write a name from references/palettes.md, or 3–6 #hex values"))
+    ch = lock.get("character", "")
     frames = bool(ch and CHAR_FRAMES.search(ch))
     if ch and CHAR_BAD.search(ch) and not frames:
-        table.append((RED, "⑭角色", f"角色写的是「{ch}」：代码画的小人和机器人已停用", "有生图能力就 AI 生帧（references/10-角色.md），没有就只出手、背影、剪影，或干脆不出人"))
+        table.append((RED, "⑭character", f"The character line says \"{ch}\": code-drawn little figures and robots are retired",
+                      "with image-generation capability use AI-generated frames (references/10-characters.md); without it show only hands, backs, silhouettes, or no people at all"))
     for r in rows:
         if OBJ_CHAR.search(r["obj"]) and not frames:
-            r["issues"].append((RED, "⑭角色", f"物列里有「{OBJ_CHAR.search(r['obj']).group(0)}」，角色却不是帧库",
-                                "这一镜换成手、背影或一个物；要出角色先按 references/角色精细度.md 做帧库"))
-        if OBJ_FACE.search(r["obj"] + r["act"]):
-            r["issues"].append((YELLOW, "⑭角色", "给金币、小球、离子这类东西长了脸", "物就画成物：靠形状、颜色、动作讲，不加表情"))
+            r["issues"].append((RED, "⑭character", f"The object column has \"{OBJ_CHAR.search(r['obj']).group(0)}\", but the character isn't a frame library",
+                                "change this shot to hands, a figure from behind or an object; to show a character, first build a frame library per references/character-detail.md"))
+        if OBJ_FACE.search(r["obj"] + " " + r["act"]):
+            r["issues"].append((YELLOW, "⑭character", "Coins, balls, ions or similar things are given faces",
+                                "draw objects as objects: tell it with shape, color and motion, no expressions"))
         if how_kind(r["how"]) == "y4" and not frames:
-            r["issues"].append((RED, "⑭角色", "y4 要角色帧库，角色行不是帧库", "换 y2/y5 或 scenes 用手和物讲；有生图能力就先做帧库"))
+            r["issues"].append((RED, "⑭character", "y4 needs a character frame library, but the character line isn't one",
+                                "switch to y2/y5 or scenes and tell it with hands and objects; with image-generation capability build a frame library first"))
 
     issues = [x for r in rows for x in r["issues"]] + table
     verdict = RED if any(x[0] == RED for x in issues) else YELLOW if issues else GREEN
@@ -457,20 +584,21 @@ def report(res):
     for r in res["rows"]:
         light = RED if any(x[0] == RED for x in r["issues"]) else YELLOW if r["issues"] else GREEN
         span = f"{r['span'][0]:g}–{r['span'][1]:g}s" if r["span"] else "?"
-        L.append(f"[{light}] 第 {r['n']} 镜  {span:<10} {r['obj'][:18]}")
+        L.append(f"[{light:<6}] shot {r['n']:<3} {span:<10} {r['obj'][:32]}")
         for lv, tag, what, fix in r["issues"]:
-            L.append(f"      [{lv}] {tag}：{what}。改：{fix}")
+            L.append(f"      [{lv}] {tag}: {what}. Fix: {fix}")
     L.append("")
-    L.append(f"整表：{len(res['rows'])} 镜，{res['total']:g} 秒，文字主导 {len(res['texty'])} 镜")
+    L.append(f"Whole table: {len(res['rows'])} shots, {res['total']:g} seconds, {len(res['texty'])} text-led shots")
     for lv, tag, what, fix in res["table"]:
-        L.append(f"  [{lv}] {tag}：{what}。改：{fix}")
+        L.append(f"  [{lv}] {tag}: {what}. Fix: {fix}")
     L.append("")
-    L.append({RED: "结论：红灯。先改镜头表、重跑这条命令，红灯清掉之前不要开始写代码。",
-              YELLOW: "结论：黄灯。可以开始做；黄灯项想清楚理由，交付说明里逐条写。",
-              GREEN: "结论：绿灯。可以开始做。"}[res["verdict"]])
+    L.append({RED: "Verdict: red light. Fix the shot list and rerun this command first; don't start writing code until the red lights are cleared.",
+              YELLOW: "Verdict: yellow light. You can start building; think through a reason for each yellow item and write them in the delivery notes.",
+              GREEN: "Verdict: green light. You can start building."}[res["verdict"]])
     if not res.get("script") and res.get("numbered"):
-        L.append(f"第 {'、'.join(map(str, res['numbered']))} 镜屏上有数字：加 --script 文稿.txt 可以核对它们和口播是不是同一个数。")
-    L.append("机器查不了、要你自己对的：全片是不是一个具体例子贯穿、是不是同一种画风；相邻两镜的构图是不是不同；开头 3 秒是不是一个小场景而不是题目。")
+        L.append(f"Shots {', '.join(map(str, res['numbered']))} have numbers on screen: add --script script.txt to check they match the narration.")
+    L.append("What the machine can't check and you have to check yourself: does one concrete example run through the whole film, is it all one art style; "
+             "do adjacent shots have different compositions; are the first 3 seconds a little scene rather than the topic.")
     return L
 
 
@@ -482,7 +610,7 @@ def main(argv=None):
     if "--script" in argv:
         k = argv.index("--script")
         if k + 1 >= len(argv):
-            print("--script 后面要跟文稿路径", file=sys.stderr); return 2
+            print("--script needs the path to the script", file=sys.stderr); return 2
         sp = Path(argv[k + 1]); del argv[k:k + 2]
     if len(argv) != 1:
         print(__doc__); return 2
@@ -491,7 +619,7 @@ def main(argv=None):
         text = p.read_text(encoding="utf-8")
         script = sp.read_text(encoding="utf-8") if sp else None
     except OSError as e:
-        print(f"读不了 {e.filename}：{e.strerror}", file=sys.stderr); return 2
+        print(f"Can't read {e.filename}: {e.strerror}", file=sys.stderr); return 2
     res = lint(text, script)
     print("\n".join(report(res)))
     if "error" in res: return 2

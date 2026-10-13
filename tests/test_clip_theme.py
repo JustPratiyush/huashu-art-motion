@@ -1,10 +1,10 @@
-"""全片主题色板（spec.theme → ctx.pal）与 y4 停用代码画的小人：
+"""Whole-film theme palette (spec.theme → ctx.pal) and y4 retiring code-drawn little figures:
 
-  色板名解析成完整 6 键；{name, 覆盖}用那套补缺的键；名字写错、对象缺键 → 启动失败，报错里列出可用名字 / 缺的键；
-  色板真的落到画面上（t3 的底色）；不写 theme 时 y1 的底不再是靛紫渐变；
-  y4 没有角色帧库（缺 data.character 或写预设名）→ 启动失败，报错说清楚；同一时刻渲两次逐像素一致。
+  A palette name resolves to the full 6 keys; {name, overrides} fills missing keys from that set; a misspelled name or an object missing keys → fails to start, with the error listing available names / missing keys;
+  the palette really lands in the picture (t3's background color); without a theme, y1's background is no longer an indigo-purple gradient;
+  y4 without a character frame library (missing data.character or a preset name) → fails to start with a clear error; rendering the same moment twice is pixel-identical.
 
-需要 uv 和 Playwright Chromium（没装就跳过，和 test_clip_world 一样）；像素只用 Pillow 读。
+Needs uv and Playwright Chromium (skipped if not installed, like test_clip_world); pixels are read only with Pillow.
 """
 import colorsys
 import json
@@ -19,7 +19,7 @@ ENGINE = ROOT / 'scripts' / 'engine'
 EX = ENGINE / 'examples'
 W = {}
 
-# 在一张空页里加载 lib/palettes.js，逐个调用 PAL.resolve，结果（或报错信息）按 JSON 打出来
+# Load lib/palettes.js in a blank page, call PAL.resolve one by one, and print the results (or error messages) as JSON
 RESOLVE = r'''
 import json, sys
 from playwright.sync_api import sync_playwright
@@ -37,12 +37,12 @@ CASES = ['paper', {'name': 'ink', 'accent': '#ABCDEF'}, {'bg': '#000', 'surface'
 def uv(args, timeout=600):
     r = subprocess.run(['uv', 'run', '--quiet', '--with', 'playwright', 'python', *args], capture_output=True, text=True, timeout=timeout)
     if r.returncode != 0 and 'Executable doesn' in (r.stdout + r.stderr):
-        raise unittest.SkipTest('Playwright Chromium 没装：uv run --with playwright playwright install chromium')
+        raise unittest.SkipTest('Playwright Chromium not installed: uv run --with playwright playwright install chromium')
     return r
 
 
 def render(spec, out, stills):
-    """渲几张静帧；返回 (CompletedProcess, {t: png 路径})。spec 是 dict（写进临时目录，图片路径要是绝对路径）或现成的 json 路径。"""
+    """Render a few stills; returns (CompletedProcess, {t: png path}). spec is a dict (written into a temp directory; image paths must be absolute) or an existing json path."""
     if isinstance(spec, dict):
         p = Path(W['tmp'].name) / (out.name + '.json'); p.write_text(json.dumps(spec, ensure_ascii=False), encoding='utf-8'); spec = p
     r = uv([str(ENGINE / 'render.py'), '--spec', str(spec), '--stills', ','.join(map(str, stills)), '--out', str(out)])
@@ -50,7 +50,7 @@ def render(spec, out, stills):
 
 
 def absolutize(spec):
-    """样例 spec 拷到临时目录渲：帧库、图片的相对路径改成绝对路径。"""
+    """Copy a sample spec to a temp directory and render it: relative paths of frame libraries and images become absolute."""
     spec = json.loads(json.dumps(spec))
     ch = (spec.get('data') or {}).get('character')
     if isinstance(ch, dict) and isinstance(ch.get('frames'), dict):
@@ -62,18 +62,18 @@ def absolutize(spec):
 
 
 def ex(name):
-    if name == 'y4_storytime':   # 样例里的帧库是占位路径；测试用作者本人的帧（只给测试用，见 fixtures 里的说明）
+    if name == 'y4_storytime':   # the sample's frame library is a placeholder path; the test uses the author's own frames (for testing only, see the note in fixtures)
         return json.loads((ROOT / 'tests' / 'fixtures' / 'y4_storytime_test_frames.json').read_text(encoding='utf-8'))
     return json.loads((EX / f'{name}.json').read_text(encoding='utf-8'))
 
 
 def setUpModule():
     if not shutil.which('uv'):
-        raise unittest.SkipTest('需要 uv')
+        raise unittest.SkipTest('needs uv')
     try:
         from PIL import Image  # noqa: F401
     except ImportError:
-        raise unittest.SkipTest('需要 Pillow')
+        raise unittest.SkipTest('needs Pillow')
     W['tmp'] = tempfile.TemporaryDirectory()
     tmp = Path(W['tmp'].name)
     r = uv(['-c', RESOLVE, str(ENGINE / 'lib' / 'palettes.js'), json.dumps(CASES)])
@@ -86,7 +86,7 @@ def setUpModule():
         't3_override': render({**t3, 'theme': {'name': 'snow', 'bg': '#102030'}}, tmp / 't3_override', [6.5]),
         'y1_default': render({k: v for k, v in ex('y1_kurzgesagt').items() if k != 'theme'}, tmp / 'y1_default', [0.2]),
         'bad_name': render({**t3, 'theme': 'purple'}, tmp / 'bad_name', [1]),
-        'bad_obj': render({**ex('y5_kinetic_type'), 'theme': {'bg': '#000000', 'ink': '#ffffff'}}, tmp / 'bad_obj', [1]),   # t3 把这种对象当旧主题写法，换 y5 测
+        'bad_obj': render({**ex('y5_kinetic_type'), 'theme': {'bg': '#000000', 'ink': '#ffffff'}}, tmp / 'bad_obj', [1]),   # t3 treats such an object as the old theme syntax, so y5 is used to test it
         't3_legacy_obj': render({**t3, 'theme': {'bg': '#000000', 'ink': '#ffffff'}}, tmp / 't3_legacy_obj', [6.5]),
         'y4_none': render({k: v for k, v in y4.items() if k != 'data'}, tmp / 'y4_none', [1]),
         'y4_preset': render({**y4, 'data': {'character': 'neutral'}}, tmp / 'y4_preset', [1]),
@@ -115,12 +115,12 @@ class Resolve(unittest.TestCase):
     def test_name_plus_override_fills_from_that_palette(self):
         r = W['resolve'][1]['ok']
         self.assertEqual(r['accent'], '#ABCDEF')
-        self.assertEqual(r['bg'], '#121417')                              # 其余键来自 ink 那套
+        self.assertEqual(r['bg'], '#121417')                              # the other keys come from the ink set
         self.assertEqual(r['accent2'], '#5FB3A1')
 
     def test_full_object_without_name_is_accepted(self):
         r = W['resolve'][2]['ok']
-        self.assertEqual(r['bg'], '#000000')                              # #rgb 规整成 #RRGGBB
+        self.assertEqual(r['bg'], '#000000')                              # #rgb normalized to #RRGGBB
         self.assertEqual(r['accent2'], '#00FF00')
 
     def test_unknown_name_lists_available(self):
@@ -174,10 +174,10 @@ class BootFails(unittest.TestCase):
             self.assertIn(n, out)
 
     def test_bad_theme_name(self):
-        self.check('bad_name', '不是色板名', 'paper', 'chalk')
+        self.check('bad_name', 'not a palette name', 'paper', 'chalk')
 
     def test_theme_object_missing_keys(self):
-        self.check('bad_obj', '缺', 'surface', 'accent2')
+        self.check('bad_obj', 'missing', 'surface', 'accent2')
 
     def test_t3_old_theme_object_still_works(self):
         r, st = W['runs']['t3_legacy_obj']
@@ -185,10 +185,10 @@ class BootFails(unittest.TestCase):
         self.assertLess(sum(img(st[6.5]).getpixel((20, 540))), 30)
 
     def test_y4_without_character(self):
-        self.check('y4_none', 'y4 需要角色帧库', '代码画的小人已停用')
+        self.check('y4_none', 'y4 needs a character frame library', 'code-drawn little figures are retired')
 
     def test_y4_preset_name_no_longer_draws(self):
-        self.check('y4_preset', 'y4 需要角色帧库', 'neutral')
+        self.check('y4_preset', 'y4 needs a character frame library', 'neutral')
 
 
 class Deterministic(unittest.TestCase):
@@ -198,7 +198,7 @@ class Deterministic(unittest.TestCase):
         self.assertEqual(ra.returncode, 0, ra.stdout + ra.stderr)
         self.assertEqual(rb.returncode, 0, rb.stdout + rb.stderr)
         for t in a:
-            self.assertIsNone(ImageChops.difference(img(a[t]), img(b[t])).getbbox(), f'{t}s 两次渲染不一致')
+            self.assertIsNone(ImageChops.difference(img(a[t]), img(b[t])).getbbox(), f'{t}s: the two renders differ')
 
 
 if __name__ == '__main__':

@@ -1,25 +1,27 @@
-# SpaceX口播动画参考代码
+# SpaceX narrated-animation reference code
 
-包含混合风格、白板、Vox拼贴、讲解员四种表达的场景代码快照。用于学习并迁移镜头、关键词时间锚和布局方法，不是开箱可渲染的完整示范；不代表最新公开成片的完整工程。
+Contains scene code snapshots of four ways of telling it: mixed styles, whiteboard, Vox collage, and presenter. Use it to learn and transfer methods for camera work, narration-keyword time anchors and layout; it isn't a complete demo that renders out of the box, and doesn't represent the complete project of the latest public film.
 
-- `spacex/tm.js`：`TM.cue(段, '原文子串')`将动作挂到口播关键词；`timing.js`是这条示例的时间数据，做新题材时需要替换。
-- `spacex_wb/common.js`：内容取景`fit/declip/shot`、笔画调度`build`、按笔顺揭示`so/soAt`。
-- `spacex_vox/common.js`：累积桌面`item/drawWorld/camEnd`、插入镜头、遮挡登记。
-- `spacex_lin/common.js`：讲解员换帧、脚底锚点、跨段姿态和顶栏；`tools/prep_presenter.py`演示绿幕切帧。
-- `eras_*.js`：四种段落表；`transitions/`：配套转场。
+This is a snapshot of a film with **Chinese narration**. Its narration transcript and timing data (`spacex/timing.js`), the narration substrings that cues anchor to, the on-screen words that quote the narration (kinetic type, labels, the whiteboard's handwriting) and the whiteboard's stroke-order data (`spacex_wb/assets/strokes.js`) remain in Chinese, because they are keyed to the original Chinese voiceover and Chinese characters; all code comments, log and error messages are in English. For an English film, rebuild `timing.js` from an English voiceover and replace those strings together (the `U.assertGlyphs` checks in each scene's `init` list the strings to update).
 
-## 使用边界
+- `spacex/tm.js`: `TM.cue(segment, 'substring of the narration')` hangs an action on a narration keyword; `timing.js` is this example's timing data, to be replaced for a new topic.
+- `spacex_wb/common.js`: content framing `fit/declip/shot`, stroke scheduling `build`, revealing in stroke order `so/soAt`.
+- `spacex_vox/common.js`: accumulating desk `item/drawWorld/camEnd`, insert shots, occlusion registration.
+- `spacex_lin/common.js`: presenter frame switching, foot anchors, poses across segments and the top bar; `tools/prep_presenter.py` demonstrates green-screen frame splitting.
+- `eras_*.js`: four segment tables; `transitions/`: matching transitions.
 
-1. 先复制上层`scripts/engine/`到自己的工程，再将这里选中的片子目录、段落表和转场放到工程根对应位置。白板段落表文件名保留`eras_wbx.js`，实际素材路径统一为`spacex_wb/`。
-2. 讲解员sprite、混合版人物帧、源生图提示词和口播音频不随本快照分发。`presenter_meta.js`只提供帧表结构；需要用自己的角色重新生成素材和元数据。已有帧表不代表素材存在。
-3. 字体沿用上层工程`lib/fonts.js`及随包字体；Vox正文和打字机数字已分别改用随包霞鹜文楷与CMU，避免额外字体缺失，预处理脚本需`numpy`和`Pillow`；运行`make_hand.py`须先在其目录准备自己的`hand_raw_1.png`至`hand_raw_3.png`。
-4. 这里的示例文字和数字是历史创作素材，不是可直接引用的最新SpaceX事实资料。新作品需自行核实脚本，并重建口播时间轴。
-5. 如只想先运行完整示范，使用上层`demos/`或`clips/`，不要从本目录开始。
+## Usage boundaries
 
-## 第三方笔顺数据
+1. First copy the upper-level `scripts/engine/` into your own project, then put the selected film directory, segment table and transitions from here in the corresponding places at the project root. The whiteboard segment table keeps the filename `eras_wbx.js`, with actual asset paths unified as `spacex_wb/`.
+2. Presenter sprites, character frames for the mixed version, source image-generation prompts and narration audio are not distributed with this snapshot. `presenter_meta.js` only provides the structure of the frame table; you need to regenerate assets and metadata with your own character. An existing frame table doesn't mean the assets exist.
+3. Fonts follow the upper project's `lib/fonts.js` and the bundled fonts; the Vox body text and typewriter numbers were switched to the bundled LXGW WenKai and CMU respectively, avoiding extra missing fonts; the preprocessing scripts need `numpy` and `Pillow`; to run `make_hand.py`, first prepare your own `hand_raw_1.png` to `hand_raw_3.png` in its directory.
+4. The text and numbers here are historical creative material, not up-to-date SpaceX facts to quote directly. New work needs its own verified script and a rebuilt narration timeline.
+5. If you just want to run a complete demo first, use the upper-level `demos/` or `clips/`, not this directory.
 
-`spacex_wb/assets/strokes.js`取自hanzi-writer-data 2.0.1／Make Me a Hanzi的笔画中线；只保留示例所用字符的medians数组并包装为浏览器变量，不包括原始字形轮廓。该衍生数据沿用Arphic Public License，原文见同目录`ARPHICPL.TXT`，不属于本仓库MIT授权范围。
+## Third-party stroke-order data
 
-上游：https://github.com/chanind/hanzi-writer-data/tree/v2.0.1
-原始数据项目：https://github.com/skishore/makemeahanzi
-许可原文：https://github.com/chanind/hanzi-writer-data/blob/master/ARPHICPL.TXT
+`spacex_wb/assets/strokes.js` is taken from the stroke medians of hanzi-writer-data 2.0.1 / Make Me a Hanzi; it keeps only the medians arrays for the characters used in the example, wrapped as a browser variable, without the original glyph outlines. This derived data keeps the Arphic Public License, whose text is `ARPHICPL.TXT` in the same directory, and is not covered by this repository's MIT license.
+
+Upstream: https://github.com/chanind/hanzi-writer-data/tree/v2.0.1
+Original data project: https://github.com/skishore/makemeahanzi
+License text: https://github.com/chanind/hanzi-writer-data/blob/master/ARPHICPL.TXT

@@ -6,9 +6,9 @@
   "height": 1080,
   "theme": "wood",
   "cues": [
-    { "at": 0.0, "kind": "image", "image": "assets/K线图_横屏.png", "text": "日 K 线·示意数据" },
+    { "at": 0.0, "kind": "image", "image": "assets/candlestick_landscape.png", "text": "Daily candles · illustrative data" },
     { "at": 1.8, "kind": "highlight", "data": { "rect": [0.74, 0.22, 0.22, 0.11] } },
-    { "at": 4.2, "kind": "image", "image": "assets/营收图_竖屏.png", "text": "同一图表的竖屏版" },
-    { "at": 6.6, "kind": "title", "text": "两张图都是代码画的" }
+    { "at": 4.2, "kind": "image", "image": "assets/revenue_portrait.png", "text": "Same chart, portrait version" },
+    { "at": 6.6, "kind": "title", "text": "Both charts were drawn in code" }
   ]
 }

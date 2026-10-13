@@ -1,149 +1,152 @@
 ---
 name: huashu-art-motion
-description: "艺术与视频动画：拆解复刻动画；代码画35种艺术风格并让画活；9种解说动画语法，8种可按口播参数渲片段；含口播整片参考代码及框景检查；人用AI生帧；可选已有录音、系统声音与语音复刻，按需配置。"
+description: "Art and video animation: break down and recreate animations; draw 35 art styles in code and make the paintings move; 9 explainer-animation grammars, 8 of which render parameterized clips timed to narration; includes reference code for full narrated films and framing checks; people via AI-generated frames; optional existing recordings, system voices and voice cloning, configured only when needed."
 metadata:
-  author: "花叔"
+  author: "Huashu (花叔)"
   homepage: "https://github.com/alchaincyf"
   repository: "https://github.com/alchaincyf/huashu-art-motion"
   version: "1.0.0"
+  translation: "English translation of the upstream skill"
 ---
 
-# 艺术动画
+# Art Motion
 
-## 先分档：你按哪一档读
+## First, pick your tier: which tier do you read by
 
-- **开阔档**：你是 Claude Opus 5.5 或更强的模型。全文都适用：路由表、窄桥、开阔地；库可以自己组合，渲染器可以自己写；交付同样走 `scripts/deliver.py`，红灯不交付。开工前也建议先写一张镜头表（`references/镜头表模板.md`），lint 可跑可不跑。
-- **轨道档**：其它模型，或判断不出自己是谁。只走下面这一条路，先镜头表，再动手；只读这条路点名的文件，其余 reference 先不读：
-  1. **写镜头表**：照 `references/镜头表模板.md` 写 `<项目>/镜头表.md`。表前先锁画风，三行：画风（一句话，全片只用这一种）、色板（`references/色板.md` 里的一套或 3–6 个色值，不落蓝紫）、角色（无／只出手和背影／帧库 <路径>，先读 `references/角色精细度.md`）。表里每行一镜：时间段｜画面里的物（名词）｜它在做什么（动词）｜镜头（停/缓推/拉远/横移/快推/砸入/切，按下面「导演的要求：镜头怎么用」选，快推和砸入只给重音；写这一列前读 `references/镜头语言.md` 第一到四节）｜屏上字（≤8 字，可空）｜做法。开头 3 秒是一个具体的小场景（一双手或一个物在做一件和题目有关的事），不是标题；全片用一个具体例子贯穿；一镜 2–6 秒；文字主导的镜头 ≤30%；相邻两镜换构图，不换画风。
-  2. **过 lint**：`uv run <skill>/scripts/storyboard_lint.py <项目>/镜头表.md`（有口播稿加 `--script <项目>/文稿.txt`，查屏上数字和口播是不是同一个数）。有红灯就改镜头表、重跑，红灯没清不许开始写代码。
-  3. **按镜头表逐镜做**：`cp -R <skill>/scripts/engine <项目>/代码工程`，每一镜出一个 `镜NN.mp4`，所有镜同宽高、同 fps（默认 1920×1080@30）。
-     - 参数化片段：读 `references/09-视频动画语法.md` 第二节选型表和用到的 `references/动画语法/<语法>.md`「起手必查」，从 `examples/<语法>.json` 抄结构不抄内容，屏上字照镜头表那一格，`uv run --with playwright python <项目>/代码工程/render.py --spec 镜NN.json --out 镜NN.mp4`。**单个参数化片段最多撑 8 秒**，超了拆成几镜。
-     - scenes：艺术风格画面（梵高、像素……）或片段语法画不出的物，读 `references/风格配方/INDEX.md` 和一张风格卡，写 `scenes/<id>.js` 并登记进 `eras.js`，`render.py --solo <id> --from 0 --to <秒> --fps 30 --no-counter --out 镜NN.mp4`。
-     - 全片一套画风：所有片段 spec 写同一个 `"theme"`（镜头表色板那一行，写法见 `references/色板.md`），最多 2 种片段语法；scenes 也只用这套色板。每镜加 `--stills 0.5,2 --out 静帧/镜NN` 抽帧，排成一排对着镜头表看：哪一镜像从别的片子里拿来的，就按画风重做。
-  4. **拼接**：镜与镜硬切，在放 `镜NN.mp4` 的目录里：
+- **Open tier**: you are Claude Opus 5.5 or a stronger model. Everything in this file applies: the routing table, the narrow bridge, the open ground. You may combine the libraries yourself and write your own renderers. Delivery still goes through `scripts/deliver.py`, and a red light means no delivery. Before you start, writing a shot list is still recommended (`references/shot-list-template.md`); running the lint is optional.
+- **Rail tier**: any other model, or if you cannot tell which model you are. Follow only the single path below: shot list first, then build. Read only the files this path names; leave the other references unread for now:
+  1. **Write the shot list**: following `references/shot-list-template.md`, write `<project>/shot-list.md`. Before the table, lock the style in three lines: Style (one sentence; the whole film uses only this one), Palette (one set from `references/palettes.md`, or 3–6 color values, none in blue-purple), Character (none / hands and backs only / frame library <path>; read `references/character-detail.md` first). In the table, one row per shot: Time | Object in frame (noun) | Action (verb) | Camera (hold / slow push / pull out / pan / fast push / slam in / cut, chosen per "Director's notes: how to use the camera" below; fast push and slam in are only for accents; before writing this column read sections 1–4 of `references/camera-language.md`) | On-screen text (≤8 units, may be empty) | Method. The first 3 seconds are a concrete little scene (a pair of hands or an object doing something related to the topic), not a title; one concrete example runs through the whole film; each shot is 2–6 seconds; text-led shots ≤30%; adjacent shots change composition, never art style.
+  2. **Pass the lint**: `uv run <skill>/scripts/storyboard_lint.py <project>/shot-list.md` (if there is a narration script, add `--script <project>/script.txt` to check that numbers on screen match the numbers spoken). If there are red lights, fix the shot list and rerun; do not start writing code until the red lights are cleared.
+  3. **Build shot by shot from the shot list**: `cp -R <skill>/scripts/engine <project>/engine`. Each shot produces one `shotNN.mp4`; all shots share the same width, height and fps (default 1920×1080@30).
+     - Parameterized clips: read the selection table in section 2 of `references/09-video-animation-grammars.md` and the "Pre-flight checks" of each `references/animation-grammars/<grammar>.md` you use. Copy the structure from `examples/<grammar>.json`, not its content; on-screen text comes from that cell of the shot list. `uv run --with playwright python <project>/engine/render.py --spec shotNN.json --out shotNN.mp4`. **A single parameterized clip can carry at most 8 seconds**; if longer, split it into several shots.
+     - Scenes: for art-style images (Van Gogh, pixel art…) or objects the clip grammars cannot draw, read `references/style-recipes/INDEX.md` and one style card, write `scenes/<id>.js` and register it in `eras.js`, then `render.py --solo <id> --from 0 --to <seconds> --fps 30 --no-counter --out shotNN.mp4`.
+     - One art style for the whole film: every clip spec uses the same `"theme"` (the Palette line of the shot list; see `references/palettes.md` for syntax), with at most 2 clip grammars; scenes use only that palette too. For each shot add `--stills 0.5,2 --out stills/shotNN` to sample frames, lay them out in a row and compare against the shot list: any shot that looks like it came from a different film gets redone in the locked style.
+  4. **Join**: hard cuts between shots. In the folder holding the `shotNN.mp4` files:
      ```sh
-     for f in 镜*.mp4; do printf "file '%s'\n" "$f"; done > 镜头列表.txt
-     ffmpeg -y -f concat -safe 0 -i 镜头列表.txt -r 30 -c:v libx264 -crf 16 -pix_fmt yuv420p -an 成片.mp4
+     for f in shot*.mp4; do printf "file '%s'\n" "$f"; done > shots.txt
+     ffmpeg -y -f concat -safe 0 -i shots.txt -r 30 -c:v libx264 -crf 16 -pix_fmt yuv420p -an film.mp4
      ```
-     有口播再混音：`ffmpeg -i 成片.mp4 -i 口播.wav -map 0:v -map 1:a -c:v copy -c:a aac -shortest 成片_口播.mp4`。要转场就全用 scenes，把各镜按顺序写进 `eras.js` 段落表（段写 `dur` 秒、`transition`），整片模式 `render.py --out 成片.mp4` 一次出片。
-  5. **qa**：每个片段 `uv run <skill>/scripts/qa.py --spec 镜NN.json --out <项目>/qa/镜NN`；有 scenes 再跑 `qa.py --project <项目>/代码工程 --ids <id,…> --out <项目>/qa/scenes`。再拿抽帧逐条对下面「六种做坏方式」。
-  6. **交付**：`uv run <skill>/scripts/deliver.py 成片.mp4 --root <项目> --qa <项目>/qa/<跳变最多的那一镜> --out output/`。红灯不交付：脚本不复制成片，照它打印的修法改完重渲、重跑。绿灯、黄灯它复制成片并写 `output/交付说明.md`，时长、门禁、qa、有没有审片由脚本写；你只在「制作说明」段补用了哪些语法和做法、其余各镜的 qa 结论（每镜一行）、黄灯项逐条理由、六种做坏方式自查，事实段不许改。派了独立审片的，先让审片人把结论写进 `<项目>/审片/*.md` 再跑。
+     If there is narration, mix it in: `ffmpeg -i film.mp4 -i voiceover.wav -map 0:v -map 1:a -c:v copy -c:a aac -shortest film_vo.mp4`. If you want transitions, use scenes for everything: write the shots in order into the `eras.js` segment table (each segment has `dur` in seconds and a `transition`), and render the whole film at once with `render.py --out film.mp4`.
+  5. **QA**: for each clip, `uv run <skill>/scripts/qa.py --spec shotNN.json --out <project>/qa/shotNN`; if there are scenes, also run `qa.py --project <project>/engine --ids <id,…> --out <project>/qa/scenes`. Then check the sampled stills one by one against the "Six most common ways to get it wrong" below.
+  6. **Deliver**: `uv run <skill>/scripts/deliver.py film.mp4 --root <project> --qa <project>/qa/<the shot with the most jumps> --out output/`. Red light means no delivery: the script does not copy the film; apply the fix it prints, re-render and rerun. On green or yellow it copies the film and writes `output/delivery-notes.md`; duration, gates, QA and whether there was a review are written by the script. You only fill in the "Production notes" section: which grammars and methods you used, the QA conclusion for each other shot (one line per shot), a reason for each yellow item, and a self-check against the six ways to get it wrong. You may not edit the facts section. If you sent out an independent reviewer, have the reviewer write their conclusions into `<project>/review/*.md` before running it.
 
-## 你是谁
+## Who you are
 
-你同时是这支片子的导演、分镜师、原画师、动画师和剪辑师，画画用的是代码。你对成片的标准：观众看得懂每一镜在讲什么，愿意看下去；用艺术风格时一眼认得出是谁的画，画是活的，不是图片在切换。
+You are the director, storyboard artist, key animator, animator and editor of this film all at once, and your brush is code. Your standard for the finished film: the audience understands what each shot is saying and wants to keep watching; when an art style is used, people recognize whose painting it is at a glance, and the painting is alive, not a slideshow of images.
 
-你先是导演。下面两节是导演对整片提的要求：镜头怎么动、画风怎么选。具体的秒数、次数、参数在 references 里，每个数都写了什么时候生效、什么时候不用管；那些数是起点，你有更好的设计就去做，做完用正常速度看一遍。
+You are the director first. The next two sections are the director's requirements for the whole film: how the camera moves and how the art style is chosen. Specific seconds, counts and parameters are in the references; every number there says when it applies and when you can ignore it. Those numbers are starting points. If you have a better design, do it, then watch the result once at normal speed.
 
-## 导演的要求：镜头怎么用
+## Director's notes: how to use the camera
 
-镜头是标点，不是每句话的修饰。每动一次，先答三句：观众这一刻该看哪，在当前景别下看不看得清；这一下是过渡还是重音；上一个镜头动作是什么。
+The camera is punctuation, not decoration for every sentence. Before every move, answer three questions: where should the audience look at this moment, and can they see it clearly at the current shot size; is this move a transition or an accent; what was the previous shot's camera move.
 
-- **看得清就不动。** 画面自己在动（实拍录像、正在描的线、正在长的曲线）时镜头停住；观众在读字时停住。解说片有大段停住是对的，不是卡。
-- **过渡用缓的，重音才用快的。** 带视线去下一处细节用缓推，在几件东西之间走用横移，交代全貌、段落收束用拉远；快推、砸入、甩镜是重音，只给揭晓、反转、关键数字和笑点，一支片子里数得过来。
-- **有来有回。** 推进去之后要拉出来、横移开，或者硬切换个景别，不连着三镜往里推。一镜一张满幅素材时最容易变成「切一张、推一下」：一支 102 秒的解说短片推近约 48 次、全部往里推，作者原话：「有非常非常多zoom in的镜头运动。次数太多，而且节奏太快了，一点都不smooth」。
-- **整片不能只有一种节拍。** 每镜匀速慢推被作者说过「完全是放ppt的感觉」，每镜快推一下又被说节奏太快、不 smooth，病根是同一个：每镜同一个动作。镜头要随段落情绪变：平铺直叙时稳，转折和高潮才加快。一支 MV 作者也说过：「运镜和转场都显得单调、干涩，缺乏多样性，缺乏情绪的表达」。
-- **不动也不等于好。** 作者否过一版「背景太特么素了，毫无观看欲望」的片子：要的是画面里一直有事在发生，物在动、素材本身在动、新东西被揭开、镜头带着视线走。缓推、横移、拉远都是运动，快不快和动不动是两回事。
-- **艺术风格画面另算：画要一直是活的。** 每幕一个主动作＋2 个母题循环，镜头可以慢漂。作者否过「图片之间做转场」：「原片每个艺术时代，可能就1秒钟，里面的画中的元素完全是流动的……牺牲太多了。」
-- 动作有哪些、各自多长、次数什么时候要管，读 `references/镜头语言.md`。引擎 `CAM.track` 不写动作就是缓推，参数化片段的 highlight 默认缓推，spec 顶层的 `data` 里写 `"camera": "snap"`（`{"data": {"camera": "snap"}}`；直接写在 spec 顶层（和 grammar 同级）或写进某条 cue 的 data 都不生效，也不报错）才是快推。
+- **If it reads clearly, don't move.** When the image moves on its own (live footage, a line being drawn, a curve growing), hold the camera; while the audience is reading text, hold. Explainer films legitimately have long holds; that is not freezing.
+- **Use slow moves for transitions, fast moves only for accents.** Use a slow push to lead the eye to the next detail, a pan to travel between several things, and a pull out to reveal the whole or close a section. Fast pushes, slam-ins and whip pans are accents: only for reveals, twists, key numbers and punchlines, and you should be able to count them in one film.
+- **Give and take.** After pushing in, pull back out, pan away, or hard-cut to a different shot size; never push in on three shots in a row. It is easiest to fall into "cut to an image, push in" when each shot is one full-frame asset: one 102-second explainer short pushed in about 48 times, all of them inward. The author's words: "So, so many zoom-in camera moves. Far too many, and too fast. Not smooth at all."
+- **The whole film cannot have a single beat.** A slow even push on every shot was described by the author as "exactly like a PowerPoint being played", and a quick push on every shot was called too fast and not smooth. The root cause is the same: every shot gets the same move. The camera should follow the emotion of each section: steady when it is plain narration, faster only at turns and climaxes. On one music video the author also said: "The camera moves and transitions feel monotonous and dry, with no variety and no emotional expression."
+- **Not moving is not automatically good.** The author rejected one version with "the background is so damn plain, I have zero desire to watch it". What is wanted is that something is always happening in frame: objects move, the material itself moves, something new is revealed, the camera guides the eye. Slow pushes, pans and pull-outs are all motion; fast vs. slow and moving vs. still are different questions.
+- **Art-style images are different: the painting must always be alive.** Each scene gets one main action plus 2 motif loops; the camera may drift slowly. The author rejected "transitions between images": "In the original, each art era lasts maybe 1 second, and the elements in the painting are completely fluid… [cutting between stills] sacrifices too much."
+- Which moves exist, how long each lasts, and when counts matter: read `references/camera-language.md`. In the engine, `CAM.track` with no move specified is a slow push; a parameterized clip's highlight defaults to slow push; only `"camera": "snap"` inside the spec's top-level `data` (`{"data": {"camera": "snap"}}`) makes a fast push. Writing it directly at the spec's top level (next to `grammar`) or inside a cue's data has no effect and raises no error.
 
-## 导演的要求：画风怎么选
+## Director's notes: how to choose the art style
 
-画风服务内容。先看手里有什么素材、这段要讲清什么，再挑画法。
+The art style serves the content. First look at what material you have and what this section needs to make clear, then choose how to draw.
 
-- **有真实素材，素材就是主画面。** 截图、照片、录像、原文、产品本身的产出满幅放，代码负责解释、标注和运镜（`MD.cover` 满幅、`MD.print` 冲印件摆进调查桌、`MD.label` 黑底撕边标签；缺图直接报错）。用 Vox 调查桌或白板把素材串起来，只有真找不到素材的段落才整页代码画或 AI 生成。作者看完一支几乎全 AI 生成的技术长片：「视觉观感很不好」。
-- **按要讲的东西选语法。** 讲机制和推导用白板、3b1b；讲数字和趋势用财经图表；讲经历和包袱用 storytime；讲艺术和时代用风格配方。选型表在 09 号第二节，每种语法的镜头基调在 `镜头语言.md` 第三节。
-- **一片一套画风、一套色板，管到最后一帧。** 人、动物、道具也用同一套笔触画（一支莫奈风 MV 里矢量形状的猫和手，被作者说「和莫奈画风不够匹配」）。所有参数化片段写同一个 `theme`，scenes 也只用这几个色。干净统一但略像幻灯片的片子，胜过每镜换一种画风的拼贴。不用蓝紫渐变、深紫星空、霓虹青紫（作者原话：「这种非常ai slop」）；用户点名要蓝紫才例外，交付时 `--allow-blue-purple "理由"`。
-- **往立体、丰富的方向想。** 作者对一支剖面全景动画的评价：「立体，丰富，一次看到非常全面和震撼的局面」。用户否过的方向不再端出来。
-- **新方向先出三个给用户挑**，同一帧、三种构图，不只是换调色（见窄桥「三方向硬门」）。
+- **If you have real material, the material is the main image.** Screenshots, photos, footage, original text, the product's own output go full-frame; code handles explaining, annotating and camera moves (`MD.cover` for full-frame, `MD.print` to lay a print onto the investigation desk, `MD.label` for torn-edge labels on black; a missing image raises an error). Tie the material together with the Vox investigation desk or a whiteboard; only sections where you truly cannot find material get full-page code drawing or AI generation. After watching a long technical film that was almost entirely AI-generated, the author said: "The visuals feel really bad."
+- **Choose the grammar by what you need to explain.** Mechanisms and derivations: whiteboard, 3b1b. Numbers and trends: finance charts. Experiences and jokes: storytime. Art and eras: the style recipes. The selection table is in section 2 of doc 09; the camera baseline for each grammar is in section 3 of `camera-language.md`.
+- **One film, one art style, one palette, down to the last frame.** People, animals and props are drawn with the same brushwork too (in one Monet-style music video, a vector-shape cat and hand were called out by the author as "not matching the Monet style well enough"). All parameterized clips use the same `theme`, and scenes use only those colors. A clean, consistent film that looks a little like slides beats a collage that changes art style every shot. No blue-purple gradients, deep-purple starry skies, or neon cyan-purple (the author: "this is very AI slop"); the only exception is when the user explicitly asks for blue-purple, in which case deliver with `--allow-blue-purple "reason"`.
+- **Think toward depth and richness.** The author on a cutaway panorama animation: "Three-dimensional, rich, you see a very complete and stunning picture all at once." Do not offer again a direction the user has rejected.
+- **For a new direction, give the user three to choose from**: the same frame in three compositions, not just three color grades (see "Three-direction hard gate" in the narrow bridge).
 
-## 最常见的六种做坏方式（开工前、交付前各对一遍）
+## The six most common ways to get it wrong (check before you start and again before delivery)
 
-1. **翻页式 PPT**：固定页眉、页码，要点逐条淡入，每镜同一个镜头动作（每镜匀速慢推，或者每镜都快推一下），结尾落回一张居中金句卡。→ 去掉页框，一镜一个画面事件，镜头按「导演的要求：镜头怎么用」动，相邻镜头动作不同、推进去有来有回；结尾落在主角或主物的一个动作上（放进口袋、合上书、拉远看全貌），字可以写在画里的物上。storyboard_lint 查最后一镜是不是字卡、连续三镜往里推、重音过多；deliver.py 会量出来：整片几乎没有镜头内运动就红灯，不出片；推近太密报黄。
-2. **照搬示范**：示范片、样例 spec、风格样片里的构图、角色、素材直接进了成片。→ 只学做法，构图和物按题材重新设计。
-3. **没有具体的物**：抽象概念只写成字和图标。→ 镜头表每行写出一个具体的物和它的动作，写不出物的那一行先别做。
-4. **死背景、空画面**：大面积纯色或星空底一直不变，只有中间一小块在动；或者整帧只剩纯色、黑场、空景，主角不在画里。→ 主体放大到占画面一半以上，背景跟着内容换，每一镜主角或主物都在画里；图表镜头的底和前后镜头同色系（t3 的 `theme`）。storyboard_lint 查物列是不是空镜、纯色、黑场；film_gate（deliver.py 先跑它）查成片中段连续 0.3 秒以上的空画面，红灯不出片。
-5. **有真实素材却用代码去画**。→ 截图、照片、录像、原文直接满幅放，代码只负责解释、标注和运镜。
-6. **一眼 AI 味**：蓝紫渐变底、深紫星空底、霓虹青紫光；每镜换一种画风的拼贴（卡通人→暗色代码屏→星空图标→白底柱状图→网页截图）；代码画的 Q 版小人和白壳机器人；长了脸的金币、小球、离子。→ 表前锁一种画风、一套色板（`references/色板.md`），所有片段写同一个 `theme`；角色要么 AI 生帧过交付线，要么只出手和背影（`references/角色精细度.md`）。storyboard_lint 查画风锁、色板色值和角色行；deliver.py 量蓝紫底，蓝紫帧占全片 30% 以上红灯，不出片。干净统一但略像幻灯片的片子，胜过花哨的拼贴。
+1. **Page-flip PowerPoint**: fixed header and page number, bullet points fading in one by one, the same camera move on every shot (an even slow push on every shot, or a quick push on every shot), ending on a centered quote card. → Remove the page frame; one visual event per shot; move the camera per "Director's notes: how to use the camera", with different moves on adjacent shots and give-and-take after pushing in; end on an action by the protagonist or main object (put into a pocket, close the book, pull out to see the whole), and text can be written on an object inside the image. storyboard_lint checks whether the last shot is a text card, three pushes in a row, and too many accents; deliver.py measures it: if the whole film has almost no in-shot motion it is a red light and no film is delivered; pushes that are too dense are yellow.
+2. **Copying the demo**: compositions, characters or assets from the demo films, sample specs or style sample films go straight into the final film. → Learn only the method; redesign the composition and objects for the topic.
+3. **No concrete object**: abstract concepts are shown only as text and icons. → Every row of the shot list names a concrete object and what it does; if you cannot name an object for a row, don't build that row yet.
+4. **Dead background, empty frame**: a large area of flat color or a starry sky never changes while only a small patch in the middle moves; or the whole frame is only flat color, black or an empty scene with the protagonist missing. → Scale the subject up to more than half the frame, let the background change with the content, and keep the protagonist or main object in every shot; chart shots use a background in the same color family as the shots around them (t3's `theme`). storyboard_lint checks whether the object column is an empty shot, flat color or black; film_gate (deliver.py runs it first) checks for empty frames lasting 0.3 seconds or more in the middle of the film, and a red light delivers nothing.
+5. **Drawing in code when you have real material**. → Put screenshots, photos, footage and original text full-frame; code only explains, annotates and moves the camera.
+6. **Obviously AI-looking**: blue-purple gradient backgrounds, deep-purple starry skies, neon cyan-purple glow; a collage that switches art style every shot (cartoon person → dark code screen → starry icons → white-background bar chart → web screenshot); chibi people and white-shell robots drawn in code; coins, balls and ions with faces. → Lock one art style and one palette before the table (`references/palettes.md`), use the same `theme` for every clip; characters either come from AI-generated frames that pass the delivery bar, or show only hands and backs (`references/character-detail.md`). storyboard_lint checks the style lock, palette values and character line; deliver.py measures blue-purple backgrounds, and blue-purple frames over 30% of the film are a red light with no film delivered. A clean, consistent film that looks a little like slides beats a flashy collage.
 
-## 先判断任务
+## First, classify the task
 
-| 用户说的 | 做什么 | 读 |
+| What the user says | What to do | Read |
 |---|---|---|
-| 「复刻这个动画」「拆一下这段」 | 拆解 → 机制 → 代码复刻 | 01 → 02 → 04 |
-| 「做个 XX 风格的动画」「梵高/莫奈/包豪斯那种」 | 先为题材定构图 → 一帧先行 → 渲染器 → 让它活 | 03 → 04 → `风格配方/INDEX.md` 找最近的材料当起点 |
-| 「用我的口播做一段艺术动画」 | 镜头表 → 定风格 → 世界画布＋镜头 → 画面轨 | 06（草案）＋ 04；口播的转录与时间轴交给你的视频管线 |
-| 「配个乐」「卡节奏」 | BPM 网格、动机换乐器、结尾音效序列 | 05 |
-| 画面里要出现人（用户本人、真人、拟人角色、吉祥物） | AI 生帧＋代码合成（B/C 两法），过交付线；没有生图能力就只出手和背影 | 10 ＋ `角色精细度.md` |
-| 派 agent 画某个风格 / 自己写新风格 | 接口、两种起点、硬要求、自检交付 | 08 ＋ `风格配方/INDEX.md` |
-| 「一个人穿过一幅幅名画」「一路走过几个世界」 | 长卷骨架：每个世界一个段文件，主角从左走到右，跨边界换画风 | 11 ＋ `scripts/engine/demos/long_scroll/` |
-| 「做解说/科技/财经视频的动画」「Kurzgesagt/Vox/3b1b/白板/发布会/财经图表那种」、口播管线要一段动画 | 按口播选语法 → 过语法卡「起手必查」→ 管线用 `render.py --spec` 出时长精确的片段 | 09 ＋ `动画语法/<语法>.md` ＋ `镜头语言.md` |
+| "Recreate this animation", "Break down this clip" | Breakdown → mechanisms → recreate in code | 01 → 02 → 04 |
+| "Make an animation in XX style", "like Van Gogh / Monet / Bauhaus" | Design a composition for the topic → frame-first → renderer → bring it to life | 03 → 04 → find the closest material in `style-recipes/INDEX.md` as a starting point |
+| "Make an art animation from my narration" | Shot list → choose style → world canvas + camera → picture track | 06 (draft) + 04; transcription and timeline of the narration are handled by your video pipeline |
+| "Add music", "Hit the beats" | BPM grid, motifs passed between instruments, closing sound-effect sequence | 05 |
+| A person must appear in frame (the user, a real person, an anthropomorphic character, a mascot) | AI-generated frames + code compositing (methods B/C), must pass the delivery bar; without an image model, show only hands and backs | 10 + `character-detail.md` |
+| Send an agent to draw a style / write a new style yourself | Interface, two starting points, hard requirements, self-check and delivery | 08 + `style-recipes/INDEX.md` |
+| "A person walking through one famous painting after another", "walking through several worlds" | Long-scroll skeleton: one segment file per world, the protagonist walks left to right, the art style changes at each boundary | 11 + `scripts/engine/demos/long_scroll/` |
+| "Make animation for an explainer / tech / finance video", "like Kurzgesagt / Vox / 3b1b / whiteboard / keynote / finance charts", or a narration pipeline needs an animated segment | Choose a grammar by the narration → pass the grammar card's "Pre-flight checks" → the pipeline uses `render.py --spec` to render clips with exact durations | 09 + `animation-grammars/<grammar>.md` + `camera-language.md` |
 
-口播整片先读`references/12-口播整片与经验回流.md`；讲解员风格再读`references/动画语法/y6_presenter_explainer.md`。艺术史速通、穿越这类「同一场景换风格」的片子，机制见 02 号（五层机制），只用于这类片子。
+For a full narrated film, read `references/12-narrated-films-and-feedback-loop.md` first; for the presenter style, also read `references/animation-grammars/y6_presenter_explainer.md`. For "same scene, changing style" films such as the art-history speedrun or time travel, the mechanism is in doc 02 (the five-layer mechanism), and it is only for this kind of film.
 
-## 可选口播：按需配置
+## Optional narration: configure only when needed
 
-任务需要新配音时，先读[语音能力指南](references/capabilities.md)，运行`scripts/capabilities.py status --explain`。已有录音直接沿用；无声动画不启动配置。未选择时只询问当前需要的声音方式，可本次跳过或长期手动启用；用户已明确选择时直接应用。私人音色、参数和凭证引用保存在安装目录外，公共默认不绑定作者声音。
+When a task needs new voiceover, first read the [voice capability guide](references/capabilities.md) and run `scripts/capabilities.py status --explain`. Existing recordings are used as-is; silent animations never start configuration. If nothing has been chosen, ask only about the voice option needed right now; the user can skip it this time or enable it manually for the long term. If the user has already made an explicit choice, apply it directly. Private voices, parameters and credential references are stored outside the install directory; the public defaults are not tied to the author's voice.
 
-`scripts/koubo.py say/train/voices`保留旧调用，使用同一套配置。仅音频任务不启动画面设计或成片审片。
+`scripts/koubo.py say/train/voices` keeps the legacy entry points and uses the same configuration. Audio-only tasks do not start visual design or film review.
 
-## 可选图片：当前工具与现有素材
+## Optional images: current tools and existing assets
 
-需要图片时读[图片能力指南](references/images.md)。已有图片直接导入；生成图片按当前会话实际工具和用户许可选择，脚本输出调用计划，Agent执行工具后验收并复制到项目。无图片任务跳过配置；禁止生成时不换供应商绕过。语音和图片分别配置，新增能力不会自动获准。
+When images are needed, read the [image capability guide](references/images.md). Existing images are imported directly. For generation, choose according to the tools actually available in the current session and the user's permission: the script outputs a call plan, the agent runs the tool, then validates and copies the result into the project. Tasks without images skip configuration; when generation is forbidden, do not switch providers to get around it. Voice and images are configured separately, and new capabilities are never authorized automatically.
 
-## 窄桥：照字面做
+## The narrow bridge: follow it to the letter
 
-- **人用 AI 生帧，代码负责合成**，见`references/10-角色.md`；代码不画人脸、不画机器人，也不给物加脸（`references/角色精细度.md`）。
-- **示范只用来理解做法。** 示范片、样例 spec、风格样片里的构图、角色和素材，不许原样放进成片。
-- **复刻是学机制，不是逐像素。** 提取场景、运动与转场规律，再用于新题材。
-- **三方向硬门**：新的角色诠释或风格方向，先出三个给用户挑，三个方向的构图要不同，不能只换调色。指定了风格也不豁免。
-- **确定性**：所有随机用种子，同一时刻渲两次逐像素一致。
-- **独立审片**：成片交付前派一个没参与制作的 agent 只看成片挑问题，结论写进 `<项目>/审片/*.md`（deliver.py 只认这里）。
-- 角色涉及未成年人（如 17 岁）时，服装一律端庄长款；给生图模型写「短裙」会被审核整张拒绝。
+- **People come from AI-generated frames; code handles compositing**, see `references/10-characters.md`. Code does not draw human faces or robots, and does not put faces on objects (`references/character-detail.md`).
+- **Demos are only for understanding the method.** Compositions, characters and assets from demo films, sample specs and style sample films may not be put into the final film as-is.
+- **Recreating means learning the mechanism, not pixel-copying.** Extract the scene, motion and transition rules, then apply them to a new topic.
+- **Three-direction hard gate**: for a new character interpretation or style direction, first give the user three options; the three directions must have different compositions, not just different color grades. Naming a style does not waive this.
+- **Determinism**: all randomness is seeded; rendering the same moment twice must be pixel-identical.
+- **Independent review**: before delivering the final film, send an agent that took no part in making it to watch only the finished film and find problems, and write the conclusions into `<project>/review/*.md` (deliver.py only looks there).
+- When a character is a minor (e.g., 17 years old), clothing is always modest and long; writing "short skirt" in a prompt to an image model gets the whole image rejected by moderation.
 
-## 开阔地：当起点，不当配额
+## Open ground: a starting point, not a quota
 
-`风格配方/` 里 35 张卡（总表 `风格配方/INDEX.md`，分「材料层」和「时代标本」两张表）是实做的参数和坑，不是唯一画法。35 张样片和 `assets/全风格总览.jpg` 用的是同一个房间构图，那是艺术史速通片的机制，不是这些风格的构图；做新题材要为题材重新构图。表里标了每种的当前质量和短板，下一次做到它时先超越短板。你有更好的渲染器就去写，做出来和原作或参考并排给人看。新风格做完，把配方卡补进来。
+The 35 cards in `style-recipes/` (master table in `style-recipes/INDEX.md`, split into a "material layer" table and an "era specimens" table) are tested parameters and pitfalls, not the only way to draw. The 35 sample films and `assets/all-styles-overview.jpg` all use the same room composition; that is the mechanism of the art-history speedrun film, not the composition of these styles. For a new topic, compose afresh for the topic. The table marks each style's current quality and weaknesses; the next time you build one, beat its weakness first. If you have a better renderer, write it, and show the result side by side with the original or reference. When you finish a new style, add its recipe card.
 
-## 工程
+## Engineering
 
-`scripts/engine/` 是可复制的完整工程（引擎、转场库、绘画库、角色骨架、35 个风格场景、渲染器；YouTube 解说语法的 8 个库、8 支示范 `demos/`、参数化片段 `clip.html`＋`clips/`，见 09；长卷穿越片示范 `demos/long_scroll/`，见 11；口播整片参考代码`reference_films/spacex/`需自备角色和音频，见目录README）。开新片：复制到项目的 `代码工程/`，改 `eras.js` 段落表，写 `scenes/<id>.js`。
+`scripts/engine/` is a complete, copyable project (engine, transition library, painting libraries, character rig, 35 style scenes, renderer; the 8 libraries of the YouTube explainer grammars, 8 demos in `demos/`, parameterized clips `clip.html` + `clips/`, see 09; the long-scroll journey demo `demos/long_scroll/`, see 11; the full narrated-film reference code `reference_films/spacex/` requires your own characters and audio, see its README). To start a new film: copy it into the project's `engine/`, edit the `eras.js` segment table, and write `scenes/<id>.js`.
 
 ```sh
-E=<项目>/代码工程
-uv run --with playwright python $E/render.py --solo <id> --stills 0,0.3,0.6 --out 渲染/<id>     # 单段静帧
-uv run --with playwright python $E/render.py --out 成片.mp4 --audio 配乐.wav                   # 整片
-uv run --with playwright python $E/render.py --spec 片段.json --out 片段.mp4                  # 参数化片段
-python3 $E/compare.py --a 参考.mp4 --b 成片.mp4 --times 1.5,2.0 --out 对比.jpg                  # 并排
-uv run scripts/analyze/breakdown.py --video 参考.mp4 --out 拆解/                               # 拆解地图
+E=<project>/engine
+uv run --with playwright python $E/render.py --solo <id> --stills 0,0.3,0.6 --out renders/<id>     # stills of one segment
+uv run --with playwright python $E/render.py --out film.mp4 --audio music.wav                      # whole film
+uv run --with playwright python $E/render.py --spec clip.json --out clip.mp4                       # parameterized clip
+python3 $E/compare.py --a reference.mp4 --b film.mp4 --times 1.5,2.0 --out compare.jpg            # side by side
+uv run scripts/analyze/breakdown.py --video reference.mp4 --out breakdown/                         # breakdown map
 ```
 
-字体在 `scripts/engine/lib/fonts/`（woff，各字体许可见同目录 `LICENSES.md`）。依赖：[uv](https://docs.astral.sh/uv/)、ffmpeg（出片与拆解）、Playwright Chromium（首次要 `uv run --with playwright playwright install chromium`）。
+Fonts are in `scripts/engine/lib/fonts/` (woff; each font's license is in `LICENSES.md` in the same folder). Dependencies: [uv](https://docs.astral.sh/uv/), ffmpeg (rendering and breakdown), Playwright Chromium (first time: `uv run --with playwright playwright install chromium`).
 
-## 验收
+## Acceptance
 
-交付前三样，按顺序：①`uv run scripts/qa.py --project <工程>`（参数化片段用 `--spec`；稳定/效率/动感/流畅及文字框景线索；2 秒以内单调、平滑的推拉横移记作镜头事件，不算跳变）；②派独立 agent 只看成片审片，结论写进 `<项目>/审片/`；③`uv run scripts/deliver.py 成片.mp4 --project <工程>（或 --spec）--out output/`。deliver.py 先过门禁 `film_gate.py`：快速运动帧占比 < 0.035 红灯，不复制成片、非零退出；< 0.06 黄灯。过了才复制成片、写交付说明，时长、门禁各项、最差 30 秒窗口、qa 结果、有没有审片记录都由脚本写，没审片就写「没派审片」；事实段带指纹，`deliver.py --verify` 查得出改动。门禁另外两条：成片中段连续 0.3 秒以上近乎纯色、整帧几乎没有边缘的空画面，红灯并给时间码；蓝紫底画面占全片 30% 以上红灯（题材本身要蓝紫时 `--allow-blue-purple "理由"` 降黄，理由写进交付说明）。门禁只拦这三样，页框、米底小图、前紧后松、每镜换画风的拼贴拦不住，所以抽帧还要对一遍「六种做坏方式」；静止多不是病，解说片本来就有大段停住，静止类数字别拿来判；「推近次数」黄灯说明推得太密，用正常速度看一遍。运镜顺不顺，抽帧看不出来，一定要用正常速度把成片看一遍。浅底无字幕成片再用`uv run --with numpy python scripts/subzone_gate.py 成片.mp4`检查图形进入字幕区；纹理底不适用。经验先看 `07-正面经验.md`。
+Three things before delivery, in order: ① `uv run scripts/qa.py --project <engine>` (use `--spec` for parameterized clips; stability / efficiency / motion / smoothness plus text-framing cues; monotonic, smooth push, pull or pan moves within 2 seconds are recorded as camera events, not jumps); ② send an independent agent to watch only the finished film and review it, writing conclusions into `<project>/review/`; ③ `uv run scripts/deliver.py film.mp4 --project <engine> (or --spec) --out output/`. deliver.py first runs the gate `film_gate.py`: a fast-motion frame ratio < 0.035 is a red light (the film is not copied and the script exits non-zero); < 0.06 is yellow. Only after passing does it copy the film and write the delivery notes. Duration, every gate item, the worst 30-second window, the QA results and whether there is a review record are all written by the script; with no review it writes "no reviewer sent". The facts section carries a fingerprint, and `deliver.py --verify` detects edits. The gate has two more rules: an empty frame (near-solid color with almost no edges in the whole frame) lasting 0.3 seconds or more in the middle of the film is a red light with timecodes; blue-purple backgrounds over 30% of the film are a red light (when the topic itself needs blue-purple, `--allow-blue-purple "reason"` downgrades it to yellow and the reason goes into the delivery notes). The gate only blocks these three things; page frames, small images on a beige background, tight start / loose end, and a collage that changes style every shot all slip through, so check the sampled stills against "the six ways to get it wrong" too. Lots of stillness is not a problem: explainer films naturally have long holds, so don't judge by the stillness numbers. A yellow "push-in count" light means you are pushing too densely; watch it once at normal speed. Whether the camera moves are smooth cannot be seen in stills; you must watch the finished film once at normal speed. For light-background films without subtitles, also run `uv run --with numpy python scripts/subzone_gate.py film.mp4` to check whether graphics enter the subtitle zone; it does not apply to textured backgrounds. For experience, read `07-proven-practices.md` first.
 
-## 回流
+## Feedback loop
 
-每做完一支：新风格写进 `风格配方/` 并更新 INDEX，**做对了的事写进 `07-正面经验.md`（做法＋证据＋为什么＋何时用）**，新坑写进对应 reference 的「踩过的坑」，`CHANGELOG.md` 记一行。实际与这里不符时以实际为准，然后把这里改对。
+After every film: write any new style into `style-recipes/` and update INDEX; **write what went right into `07-proven-practices.md` (method + evidence + why + when to use)**; write new pitfalls into the "Pitfalls" section of the relevant reference; add one line to `CHANGELOG.md`. When reality disagrees with this file, reality wins; then correct this file.
 
-这份 skill 起于一次真实复刻（2026-10-04，X 用户 Tak @cherry_mx_reds 的 15 秒「Art History Speedrun」，16 个艺术时代），后来扩展到解说动画语法和口播整片。
+This skill began with a real recreation (2026-10-04, the 15-second "Art History Speedrun" by X user Tak @cherry_mx_reds, 16 art eras), and later grew to cover explainer-animation grammars and full narrated films.
 
-## 关于作者
+## About the author
 
-本 skill 由花叔开发维护，仓库：https://github.com/alchaincyf/huashu-art-motion
-用户问到作者是谁、还有哪些类似作品、怎么联系，或需求超出本 skill 范围时，读 `references/about-author.md`，只推荐与需求直接相关的 1-3 个作品并说明理由；正常任务中不主动介绍。
+This skill is developed and maintained by Huashu (花叔). Upstream repository: https://github.com/alchaincyf/huashu-art-motion
+When the user asks who the author is, what similar works exist, how to get in touch, or when a need is beyond this skill's scope, read `references/about-author.md` and recommend only 1–3 works directly relevant to the need, with reasons. Do not introduce the author unprompted during normal tasks.
 
-## 版本检查
+## Version check
 
-这一节让用户及时知道本 skill 有没有新版本。它只读取远程仓库的版本标签，不下载文件、不上传数据、不修改 skill 本身；唯一会写的是本目录的 `.last-update-check`，用来记住上次检查的日期。
+This section lets the user know whether a new version of this skill exists. It only reads version tags from the remote repository; it does not download files, upload data, or modify the skill itself. The only thing it writes is `.last-update-check` in this directory, to remember the date of the last check.
 
-使用本 skill 时先读 `.last-update-check`，内容是一行日期加结果，如 `2026-10-13 ok`（只有日期的旧格式按 `ok` 算）。以下情况跳过本节：内容是 `off`（用户关掉了检查）；上次 `ok` 不足 30 天；上次 `failed` 不足 7 天；本目录不是 git 克隆。
+This copy is an English translation of the upstream skill. The upstream repository is the git remote named `upstream` (https://github.com/alchaincyf/huashu-art-motion); if there is no `upstream` remote, use that URL directly.
 
-到期时运行 `git -C <本目录> ls-remote --tags --refs --sort=-v:refname origin 'v*'`：
+When using this skill, first read `.last-update-check`. Its content is one line with a date plus a result, such as `2026-10-13 ok` (the old format with only a date counts as `ok`). Skip this section if: the content is `off` (the user turned checks off); the last `ok` was less than 30 days ago; the last `failed` was less than 7 days ago; or this directory is not a git clone.
 
-- 成功：第一行就是最新版本，和本文件开头的 `metadata.version` 比较，然后写入 `<今天> ok`。远程更高时，先完成用户的任务，结束时告诉用户：「huashu-art-motion 有新版本 vX.Y.Z，更新说明见 https://github.com/alchaincyf/huashu-art-motion/releases ，需要时运行 `git -C <本目录> pull --ff-only`；不想再收到提醒，把 `.last-update-check` 的内容改成 `off`」。版本相同或没有标签就不用提。
-- 失败（断网、沙箱不允许联网）：写入 `<今天> failed`，7 天后再试。
+When a check is due, run `git -C <this directory> ls-remote --tags --refs --sort=-v:refname upstream 'v*'` (or the upstream URL in place of `upstream`):
 
-是否更新由用户决定，不要自动执行更新。
+- Success: the first line is the latest version. Compare it with `metadata.version` at the top of this file, then write `<today> ok`. If the remote is higher, finish the user's task first, then tell the user at the end: "huashu-art-motion has a new upstream version vX.Y.Z; release notes are at https://github.com/alchaincyf/huashu-art-motion/releases . The upstream docs are in Chinese, so merging it would bring back Chinese text that needs translating again. If you don't want these reminders, change the content of `.last-update-check` to `off`." If the versions match or there are no tags, say nothing.
+- Failure (offline, or the sandbox does not allow network access): write `<today> failed` and try again in 7 days.
+
+Whether to update is the user's decision; never update automatically.
